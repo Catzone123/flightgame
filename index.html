@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retro Pixel Dogfight</title>
+    <title>Retro Pixel Dogfight - Enhanced Flight Sim</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
         * {
@@ -26,7 +26,7 @@
             image-rendering: crisp-edges;
         }
 
-        /* CRT Overlay */
+        /* CRT Filter */
         #crt-overlay {
             position: absolute;
             top: 0;
@@ -38,24 +38,26 @@
             background-size: 100% 4px, 6px 100%;
             pointer-events: none;
             box-shadow: inset 0 0 100px rgba(0,0,0,0.8);
+            z-index: 5;
         }
 
+        /* Top Bar UI */
         #ui {
             position: absolute;
             top: 20px;
             left: 20px;
             color: #ffffff;
-            font-size: 16px;
-            text-shadow: 3px 3px 0px #000;
+            font-size: 14px;
+            text-shadow: 2px 2px 0px #000;
             pointer-events: none;
             z-index: 10;
         }
 
         #health-bar-container {
-            width: 200px;
-            height: 16px;
+            width: 180px;
+            height: 14px;
             border: 2px solid #fff;
-            margin-top: 10px;
+            margin-top: 8px;
             background: #222;
         }
 
@@ -66,12 +68,49 @@
             transition: width 0.1s;
         }
 
+        /* Flight HUD Instrument Panel */
+        #hud-panel {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.75);
+            border: 3px solid #555;
+            padding: 12px;
+            color: #00ff66;
+            font-size: 10px;
+            z-index: 10;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            box-shadow: 4px 4px 0px #000;
+        }
+
+        .gauge-box {
+            border: 1px solid #00ff66;
+            padding: 6px;
+            background: #111;
+        }
+
+        .gauge-title {
+            color: #aaa;
+            font-size: 8px;
+            margin-bottom: 4px;
+        }
+
+        .gauge-value {
+            font-size: 12px;
+            color: #fff;
+        }
+
+        .engine-on { color: #00ff66 !important; }
+        .engine-off { color: #ff3333 !important; }
+
         #crosshair {
             position: absolute;
             top: 50%;
             left: 50%;
-            width: 20px;
-            height: 20px;
+            width: 24px;
+            height: 24px;
             transform: translate(-50%, -50%);
             border: 2px solid rgba(0, 255, 102, 0.8);
             border-radius: 50%;
@@ -92,13 +131,15 @@
 
         #controls-hint {
             position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
+            bottom: 15px;
+            right: 20px;
             color: #aaa;
-            font-size: 10px;
+            font-size: 9px;
+            text-align: right;
+            line-height: 1.6;
             text-shadow: 2px 2px 0px #000;
             pointer-events: none;
+            z-index: 10;
         }
 
         #game-over {
@@ -135,9 +176,7 @@
             margin-top: 20px;
         }
 
-        #restart-btn:hover {
-            background-color: #00cc52;
-        }
+        #restart-btn:hover { background-color: #00cc52; }
     </style>
 </head>
 <body>
@@ -153,10 +192,35 @@
         </div>
     </div>
 
-    <div id="controls-hint">MOUSE: AIM & FLY | LEFT-CLICK or SPACE: SHOOT</div>
+    <!-- HUD Instrument Panel -->
+    <div id="hud-panel">
+        <div class="gauge-box">
+            <div class="gauge-title">ENGINE [E]</div>
+            <div id="hud-engine" class="gauge-value engine-on">ON</div>
+        </div>
+        <div class="gauge-box">
+            <div class="gauge-title">SPEED</div>
+            <div id="hud-speed" class="gauge-value">120 SPD</div>
+        </div>
+        <div class="gauge-box">
+            <div class="gauge-title">ALTITUDE</div>
+            <div id="hud-alt" class="gauge-value">250 FT</div>
+        </div>
+        <div class="gauge-box">
+            <div class="gauge-title">TIME</div>
+            <div id="hud-time" class="gauge-value">DAY</div>
+        </div>
+    </div>
+
+    <div id="controls-hint">
+        WASD / ARROWS: PITCH & ROLL<br>
+        W / S: THROTTLE SPEED<br>
+        E: TOGGLE ENGINE ON/OFF<br>
+        SPACE: FIRING CANNON
+    </div>
 
     <div id="game-over">
-        <h1 id="over-title">SHOT DOWN!</h1>
+        <h1 id="over-title">CRASHED!</h1>
         <p>ENEMIES DESTROYED: <span id="final-score">0</span></p>
         <button id="restart-btn" onclick="resetGame()">FLY AGAIN</button>
     </div>
@@ -165,31 +229,92 @@
 
     <script>
         let scene, camera, renderer;
-        let player;
+        let player, playerPropeller;
         let enemies = [];
         let playerBullets = [];
         let enemyBullets = [];
         let particles = [];
+        let sunLight, ambientLight;
 
         let score = 0;
         let playerHealth = 100;
         let isGameOver = false;
 
-        let targetX = 0;
-        let targetY = 0;
-        let isShooting = false;
-        let lastShootTime = 0;
+        // Flight Physics Variables
+        let speed = 0.5;
+        let maxSpeed = 0.9;
+        let minSpeed = 0.1;
+        let isEngineOn = true;
+        let pitch = 0, roll = 0, yaw = 0;
 
-        const windowHalfX = window.innerWidth / 2;
-        const windowHalfY = window.innerHeight / 2;
+        // Key states
+        const keys = { KeyW: false, KeyS: false, KeyA: false, KeyD: false, ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false, Space: false };
+
+        // Day/Night Cycle Variable
+        let dayTime = 0; // 0 to 2PI
+
+        // Web Audio Procedural Sound Engine
+        let audioCtx, engineOsc, engineGain;
+
+        function initAudio() {
+            if (audioCtx) return;
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            
+            engineOsc = audioCtx.createOscillator();
+            engineGain = audioCtx.createGain();
+
+            engineOsc.type = 'sawtooth';
+            engineOsc.frequency.setValueAtTime(60, audioCtx.currentTime);
+
+            engineGain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+
+            engineOsc.connect(engineGain);
+            engineGain.connect(audioCtx.destination);
+            engineOsc.start();
+        }
+
+        function updateAudio() {
+            if (!audioCtx) return;
+            if (isEngineOn && !isGameOver) {
+                engineGain.gain.setTargetAtTime(0.05, audioCtx.currentTime, 0.1);
+                engineOsc.frequency.setTargetAtTime(40 + speed * 120, audioCtx.currentTime, 0.1);
+            } else {
+                engineGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.2);
+            }
+        }
+
+        // Texture Generator
+        function generatePixelTexture(type) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 16;
+            canvas.height = 16;
+            const ctx = canvas.getContext('2d');
+
+            for (let x = 0; x < 16; x++) {
+                for (let y = 0; y < 16; y++) {
+                    let noise = (Math.random() - 0.5) * 30;
+                    if (type === 'grass') ctx.fillStyle = `rgb(${40 + noise}, ${150 + noise}, ${40 + noise})`;
+                    else if (type === 'wood') ctx.fillStyle = `rgb(${160 + noise}, ${110 + noise}, ${60 + noise})`;
+                    else if (type === 'red_wool') ctx.fillStyle = `rgb(${180 + noise}, ${30 + noise}, ${30 + noise})`;
+                    else if (type === 'obsidian') ctx.fillStyle = `rgb(${30 + noise}, ${20 + noise}, ${40 + noise})`;
+                    ctx.fillRect(x, y, 1, 1);
+                }
+            }
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.magFilter = THREE.NearestFilter;
+            texture.minFilter = THREE.NearestFilter;
+            return texture;
+        }
+
+        const textures = {};
 
         init();
         animate();
 
         function init() {
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x1a4899);
-            scene.fog = new THREE.FogExp2(0x1a4899, 0.008);
+            scene.fog = new THREE.FogExp2(0x7ec0ee, 0.005);
 
             camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
             camera.position.set(0, 2, 8);
@@ -199,117 +324,101 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
             document.getElementById('game-container').appendChild(renderer.domElement);
 
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            textures.grass = generatePixelTexture('grass');
+            textures.wood = generatePixelTexture('wood');
+            textures.red = generatePixelTexture('red_wool');
+            textures.obsidian = generatePixelTexture('obsidian');
+
+            // Lighting Setup for Day/Night Cycle
+            ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
             scene.add(ambientLight);
 
-            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-            dirLight.position.set(100, 100, 50);
-            scene.add(dirLight);
+            sunLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            sunLight.position.set(0, 100, 0);
+            scene.add(sunLight);
 
-            // Terrain Grid
-            const gridHelper = new THREE.GridHelper(800, 80, 0x00ff66, 0x003311);
-            gridHelper.position.y = -20;
-            scene.add(gridHelper);
+            createBlockyTerrain();
 
-            // Create Player Plane
-            player = createPlane(0x00ff66, true);
+            player = createPlane(textures.wood, textures.grass, true);
             scene.add(player);
 
             // Controls
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mousedown', () => isShooting = true);
-            document.addEventListener('mouseup', () => isShooting = false);
-            document.addEventListener('keydown', (e) => { if (e.code === 'Space') isShooting = true; });
-            document.addEventListener('keyup', (e) => { if (e.code === 'Space') isShooting = false; });
+            window.addEventListener('keydown', onKeyDown);
+            window.addEventListener('keyup', onKeyUp);
             window.addEventListener('resize', onWindowResize);
 
-            // Spawn enemy jets
-            for(let i = 0; i < 4; i++) {
-                spawnEnemy();
-            }
+            for(let i = 0; i < 4; i++) spawnEnemy();
         }
 
-        function createPlane(colorHex, isPlayer = false) {
-            const group = new THREE.Group();
-            const bodyMat = new THREE.MeshStandardMaterial({ color: colorHex, flatShading: true });
-            const wingMat = new THREE.MeshStandardMaterial({ color: isPlayer ? 0xffffff : 0x111111, flatShading: true });
+        function createBlockyTerrain() {
+            const groundGroup = new THREE.Group();
+            const geo = new THREE.BoxGeometry(6, 6, 6);
+            const mat = new THREE.MeshStandardMaterial({ map: textures.grass, flatShading: true });
 
-            // Body
+            for(let x = -120; x <= 120; x += 6) {
+                for(let z = -250; z <= 100; z += 6) {
+                    const block = new THREE.Mesh(geo, mat);
+                    block.position.set(x, -25, z);
+                    groundGroup.add(block);
+                }
+            }
+            scene.add(groundGroup);
+        }
+
+        function createPlane(bodyTex, wingTex, isPlayer = false) {
+            const group = new THREE.Group();
+            const bodyMat = new THREE.MeshStandardMaterial({ map: bodyTex, flatShading: true });
+            const wingMat = new THREE.MeshStandardMaterial({ map: wingTex, flatShading: true });
+
             const body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 2.5), bodyMat);
             group.add(body);
 
-            // Wings
-            const wing = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.1, 0.9), wingMat);
+            const wing = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.15, 0.9), wingMat);
             wing.position.set(0, 0.1, 0.2);
             group.add(wing);
 
-            // Tail
-            const tail = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.8, 0.6), wingMat);
+            const tail = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.8, 0.6), wingMat);
             tail.position.set(0, 0.5, -1.1);
             group.add(tail);
+
+            if (isPlayer) {
+                const propGeo = new THREE.BoxGeometry(1.4, 0.15, 0.05);
+                const propMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+                playerPropeller = new THREE.Mesh(propGeo, propMat);
+                playerPropeller.position.set(0, 0, 1.3);
+                group.add(playerPropeller);
+            }
 
             return group;
         }
 
         function spawnEnemy() {
-            const enemy = createPlane(0xff3333);
+            const enemy = createPlane(textures.red, textures.obsidian);
             enemy.position.set(
                 (Math.random() - 0.5) * 80,
                 Math.random() * 20 + 5,
                 -100 - Math.random() * 50
             );
-            enemy.userData = {
-                health: 30,
-                speed: 0.4 + Math.random() * 0.2,
-                lastShot: 0
-            };
+            enemy.userData = { health: 30, speed: 0.35 + Math.random() * 0.2, lastShot: 0 };
             scene.add(enemy);
             enemies.push(enemy);
         }
 
-        function shootBullet(isEnemy = false, sourceObj) {
-            const mat = new THREE.MeshBasicMaterial({ color: isEnemy ? 0xff0000 : 0xffff00 });
-            const geo = new THREE.BoxGeometry(0.15, 0.15, 0.8);
-            const bullet = new THREE.Mesh(geo, mat);
+        function onKeyDown(e) {
+            initAudio();
+            if (keys.hasOwnProperty(e.code)) keys[e.code] = true;
 
-            if (!isEnemy) {
-                bullet.position.copy(player.position);
-                bullet.position.z -= 1.5;
-                bullet.userData = { velocity: new THREE.Vector3(0, 0, -2) };
-                playerBullets.push(bullet);
-            } else {
-                bullet.position.copy(sourceObj.position);
-                const dir = new THREE.Vector3().subVectors(player.position, sourceObj.position).normalize();
-                bullet.userData = { velocity: dir.multiplyScalar(1.2) };
-                enemyBullets.push(bullet);
-            }
-
-            scene.add(bullet);
-        }
-
-        function createExplosion(pos) {
-            for(let i = 0; i < 12; i++) {
-                const p = new THREE.Mesh(
-                    new THREE.BoxGeometry(0.4, 0.4, 0.4),
-                    new THREE.MeshBasicMaterial({ color: Math.random() > 0.5 ? 0xff9900 : 0xff3300 })
-                );
-                p.position.copy(pos);
-                p.userData = {
-                    vel: new THREE.Vector3(
-                        (Math.random() - 0.5) * 0.8,
-                        (Math.random() - 0.5) * 0.8,
-                        (Math.random() - 0.5) * 0.8
-                    ),
-                    life: 1.0
-                };
-                scene.add(p);
-                particles.push(p);
+            // Toggle Engine Key [E]
+            if (e.code === 'KeyE') {
+                isEngineOn = !isEngineOn;
+                const engineHUD = document.getElementById('hud-engine');
+                engineHUD.innerText = isEngineOn ? 'ON' : 'OFF';
+                engineHUD.className = 'gauge-value ' + (isEngineOn ? 'engine-on' : 'engine-off');
             }
         }
 
-        function onMouseMove(event) {
-            targetX = ((event.clientX - windowHalfX) / windowHalfX) * 12;
-            targetY = -((event.clientY - windowHalfY) / windowHalfY) * 8;
+        function onKeyUp(e) {
+            if (keys.hasOwnProperty(e.code)) keys[e.code] = false;
         }
 
         function onWindowResize() {
@@ -318,35 +427,105 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
+        let lastShootTime = 0;
+
         function updatePlayer() {
-            player.position.x += (targetX - player.position.x) * 0.1;
-            player.position.y += (targetY - player.position.y) * 0.1;
+            // Engine Thrust and Glide Mechanics
+            if (isEngineOn) {
+                if (keys.KeyW || keys.ArrowUp) speed = Math.min(maxSpeed, speed + 0.01);
+                if (keys.KeyS || keys.ArrowDown) speed = Math.max(minSpeed, speed - 0.01);
+                playerPropeller.rotation.z += speed * 2;
+            } else {
+                speed = Math.max(0, speed - 0.005); // Glide deceleration
+                player.position.y -= 0.08; // Gravity drop when engine is off
+            }
 
-            player.rotation.z = -(targetX - player.position.x) * 0.2;
-            player.rotation.x = (targetY - player.position.y) * 0.15;
+            // Keyboard Direction Controls
+            if (keys.KeyA || keys.ArrowLeft) roll = Math.min(0.6, roll + 0.05);
+            else if (keys.KeyD || keys.ArrowRight) roll = Math.max(-0.6, roll - 0.05);
+            else roll *= 0.9;
 
+            if (keys.KeyW || keys.ArrowUp) pitch = Math.max(-0.4, pitch - 0.04);
+            else if (keys.KeyS || keys.ArrowDown) pitch = Math.min(0.4, pitch + 0.04);
+            else pitch *= 0.9;
+
+            player.position.x -= roll * 0.4 * (speed + 0.2);
+            player.position.y += pitch * 0.3 * (speed + 0.2);
+
+            player.rotation.z = roll;
+            player.rotation.x = pitch;
+
+            // Ground Crash Check
+            if (player.position.y < -20) {
+                triggerGameOver("CRASHED INTO TERRAIN!");
+            }
+
+            // Firing Cannon
             const now = Date.now();
-            if (isShooting && now - lastShootTime > 120) {
+            if (keys.Space && now - lastShootTime > 120) {
                 shootBullet(false);
                 lastShootTime = now;
+            }
+
+            // HUD Gauges Update
+            document.getElementById('hud-speed').innerText = Math.round(speed * 200) + ' SPD';
+            document.getElementById('hud-alt').innerText = Math.round((player.position.y + 25) * 10) + ' FT';
+        }
+
+        function shootBullet(isEnemy = false, sourceObj) {
+            const mat = new THREE.MeshBasicMaterial({ color: isEnemy ? 0xff0000 : 0xffff00 });
+            const geo = new THREE.BoxGeometry(0.2, 0.2, 0.8);
+            const bullet = new THREE.Mesh(geo, mat);
+
+            if (!isEnemy) {
+                bullet.position.copy(player.position);
+                bullet.position.z -= 1.5;
+                bullet.userData = { velocity: new THREE.Vector3(0, pitch * 0.5, -2 - speed) };
+                playerBullets.push(bullet);
+            } else {
+                bullet.position.copy(sourceObj.position);
+                const dir = new THREE.Vector3().subVectors(player.position, sourceObj.position).normalize();
+                bullet.userData = { velocity: dir.multiplyScalar(1.2) };
+                enemyBullets.push(bullet);
+            }
+            scene.add(bullet);
+        }
+
+        function updateDayNightCycle() {
+            dayTime += 0.0005; // Cycle progression rate
+            
+            const sunY = Math.sin(dayTime);
+            const sunZ = Math.cos(dayTime);
+            sunLight.position.set(0, sunY * 100, sunZ * 100);
+
+            // Sky Color interpolation
+            if (sunY > 0) {
+                // Day Time
+                scene.background.setHSL(0.58, 0.7, 0.5 * sunY + 0.2);
+                scene.fog.color.setHSL(0.58, 0.7, 0.5 * sunY + 0.2);
+                ambientLight.intensity = Math.max(0.3, sunY * 0.8);
+                document.getElementById('hud-time').innerText = "DAY";
+            } else {
+                // Night Time
+                scene.background.setHSL(0.65, 0.8, 0.05);
+                scene.fog.color.setHSL(0.65, 0.8, 0.05);
+                ambientLight.intensity = 0.15;
+                document.getElementById('hud-time').innerText = "NIGHT";
             }
         }
 
         function updateEnemies() {
             const now = Date.now();
-
             for (let i = enemies.length - 1; i >= 0; i--) {
                 const enemy = enemies[i];
 
-                // Fly towards player position
                 const dir = new THREE.Vector3().subVectors(player.position, enemy.position).normalize();
                 enemy.position.add(dir.multiplyScalar(enemy.userData.speed));
                 enemy.lookAt(player.position);
 
-                // NPC Enemy Shooting
-                if (enemy.position.distanceTo(player.position) < 80 && now - enemy.userData.lastShot > 1500) {
+                if (enemy.position.distanceTo(player.position) < 80 && now - enemy.userData.lastShot > 1600) {
                     shootBullet(true, enemy);
-                    enemy.userData.lastShot = now + Math.random() * 500;
+                    enemy.userData.lastShot = now;
                 }
 
                 if (enemy.position.z > camera.position.z + 10) {
@@ -383,7 +562,7 @@
                     }
                 }
 
-                if (b && b.position.z < -150) {
+                if (b && b.position.z < -160) {
                     scene.remove(b);
                     playerBullets.splice(i, 1);
                 }
@@ -402,7 +581,7 @@
                     enemyBullets.splice(i, 1);
 
                     if (playerHealth <= 0) {
-                        triggerGameOver();
+                        triggerGameOver("SHOT DOWN!");
                     }
                     continue;
                 }
@@ -413,7 +592,7 @@
                 }
             }
 
-            // Explosions
+            // Particle Explosions
             for (let i = particles.length - 1; i >= 0; i--) {
                 const p = particles[i];
                 p.position.add(p.userData.vel);
@@ -427,8 +606,29 @@
             }
         }
 
-        function triggerGameOver() {
+        function createExplosion(pos) {
+            for(let i = 0; i < 12; i++) {
+                const p = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.4, 0.4, 0.4),
+                    new THREE.MeshStandardMaterial({ map: textures.red })
+                );
+                p.position.copy(pos);
+                p.userData = {
+                    vel: new THREE.Vector3(
+                        (Math.random() - 0.5) * 0.8,
+                        (Math.random() - 0.5) * 0.8,
+                        (Math.random() - 0.5) * 0.8
+                    ),
+                    life: 1.0
+                };
+                scene.add(p);
+                particles.push(p);
+            }
+        }
+
+        function triggerGameOver(reason = "SHOT DOWN!") {
             isGameOver = true;
+            document.getElementById('over-title').innerText = reason;
             document.getElementById('final-score').innerText = score;
             document.getElementById('game-over').style.display = 'block';
         }
@@ -442,8 +642,12 @@
 
             score = 0;
             playerHealth = 100;
+            speed = 0.5;
+            isEngineOn = true;
             isGameOver = false;
 
+            document.getElementById('hud-engine').innerText = 'ON';
+            document.getElementById('hud-engine').className = 'gauge-value engine-on';
             document.getElementById('score').innerText = '0';
             document.getElementById('health-bar').style.width = '100%';
             document.getElementById('game-over').style.display = 'none';
@@ -457,8 +661,10 @@
 
             if (!isGameOver) {
                 updatePlayer();
+                updateDayNightCycle();
                 updateEnemies();
                 updateProjectiles();
+                updateAudio();
             }
 
             renderer.render(scene, camera);
