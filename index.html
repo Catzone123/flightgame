@@ -183,6 +183,15 @@
             animate();
         }
 
+        function setupCamera(plane) {
+            const camera = new THREE.PerspectiveCamera(60, getViewportWidth() / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 3, 8);
+            camera.rotation.set(0, 0, 0);
+            plane.add(camera);
+            camera.lookAt(new THREE.Vector3(0, 0, -5));
+            return camera;
+        }
+
         function initGame() {
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x7ec0ee);
@@ -206,15 +215,11 @@
             const wingColor = parseInt(document.getElementById('wing-color').value.replace('#', '0x'));
             const wingStyle = document.getElementById('wing-style').value;
 
-            // Player 1
+            // Player 1 setup
             const p1Obj = createCustomPlane(bodyColor, wingColor, wingStyle);
-            p1Obj.position.set(isMultiplayer ? -10 : 0, -21, 0);
+            p1Obj.position.set(isMultiplayer ? -10 : 0, -21.8, 0);
             scene.add(p1Obj);
-
-            const cam1 = new THREE.PerspectiveCamera(60, getViewportWidth() / window.innerHeight, 0.1, 1000);
-            cam1.position.set(0, 3, 8);
-            cam1.lookAt(0, 0, -5);
-            p1Obj.add(cam1);
+            const cam1 = setupCamera(p1Obj);
 
             players.push({
                 id: 1, mesh: p1Obj, camera: cam1, health: 100, score: 0,
@@ -223,16 +228,12 @@
                 isAirbrake: false, isReverseThrust: false, gearDown: true, lastGearToggle: 0
             });
 
-            // Player 2
+            // Player 2 setup
             if (isMultiplayer) {
                 const p2Obj = createCustomPlane(0xd32f2f, 0xfbc02d, wingStyle);
-                p2Obj.position.set(10, -21, 0);
+                p2Obj.position.set(10, -21.8, 0);
                 scene.add(p2Obj);
-
-                const cam2 = new THREE.PerspectiveCamera(60, getViewportWidth() / window.innerHeight, 0.1, 1000);
-                cam2.position.set(0, 3, 8);
-                cam2.lookAt(0, 0, -5);
-                p2Obj.add(cam2);
+                const cam2 = setupCamera(p2Obj);
 
                 players.push({
                     id: 2, mesh: p2Obj, camera: cam2, health: 100, score: 0,
@@ -373,7 +374,6 @@
             group.add(prop);
             group.userData.propeller = prop;
 
-            // Landing Gear Assembly
             const gearGroup = new THREE.Group();
             const wheelMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
             const strutMat = new THREE.MeshLambertMaterial({ color: 0x888888 });
@@ -381,21 +381,18 @@
             const wheelGeo = new THREE.CylinderGeometry(0.2, 0.2, 0.1, 8);
             wheelGeo.rotateZ(Math.PI / 2);
 
-            // Left Gear
             const strutL = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.4, 0.08), strutMat);
             strutL.position.set(-0.8, -0.4, 0);
             const wheelL = new THREE.Mesh(wheelGeo, wheelMat);
             wheelL.position.set(-0.8, -0.6, 0);
             gearGroup.add(strutL, wheelL);
 
-            // Right Gear
             const strutR = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.4, 0.08), strutMat);
             strutR.position.set(0.8, -0.4, 0);
             const wheelR = new THREE.Mesh(wheelGeo, wheelMat);
             wheelR.position.set(0.8, -0.6, 0);
             gearGroup.add(strutR, wheelR);
 
-            // Nose Gear
             const strutN = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.4, 0.08), strutMat);
             strutN.position.set(0, -0.4, 0.8);
             const wheelN = new THREE.Mesh(wheelGeo, wheelMat);
@@ -442,18 +439,15 @@
                 p.isAirbrake = !!airbrake;
                 p.isReverseThrust = !!reverseThrust;
 
-                // Toggle Landing Gear
                 if (gearToggle && now - p.lastGearToggle > 400) {
                     p.gearDown = !p.gearDown;
                     p.mesh.userData.gear.visible = p.gearDown;
                     p.lastGearToggle = now;
                 }
 
-                // Throttle Controls
                 if (up) p.throttle = Math.min(1.0, p.throttle + 0.01);
                 if (down) p.throttle = Math.max(0.0, p.throttle - 0.01);
 
-                // Calculate Speeds & Drag
                 let targetSpeed = p.throttle * 0.9 + 0.1;
                 
                 if (p.isReverseThrust) {
@@ -464,7 +458,6 @@
                     targetSpeed *= 0.3;
                 }
 
-                // Gear Drag Penalty
                 if (p.gearDown && !p.isReverseThrust) {
                     targetSpeed *= 0.85;
                 }
@@ -517,14 +510,12 @@
                 p.mesh.position.add(fwd.multiplyScalar(p.forwardSpeed));
                 p.mesh.position.y += p.verticalVelocity;
 
-                // Ground Contact Logic
                 if (p.mesh.position.y <= -21.8) {
                     p.mesh.position.y = -21.8;
                     p.verticalVelocity = 0;
                     p.mesh.rotation.x *= 0.8;
                     p.mesh.rotation.z *= 0.8;
 
-                    // Belly Scrape Damage if landing gear is UP
                     if (!p.gearDown && Math.abs(p.forwardSpeed) > 0.05) {
                         p.health -= 0.5;
                         updateHealthUI(p);
