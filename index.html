@@ -26,7 +26,7 @@
             image-rendering: crisp-edges;
         }
 
-        /* Retro CRT Overlay */
+        /* CRT Overlay */
         #crt-overlay {
             position: absolute;
             top: 0;
@@ -73,7 +73,7 @@
             width: 20px;
             height: 20px;
             transform: translate(-50%, -50%);
-            border: 2px solid rgba(0, 255, 102, 0.7);
+            border: 2px solid rgba(0, 255, 102, 0.8);
             border-radius: 50%;
             pointer-events: none;
             z-index: 10;
@@ -153,7 +153,7 @@
         </div>
     </div>
 
-    <div id="controls-hint">MOUSE: FLY | CLICK / SPACE: SHOOT</div>
+    <div id="controls-hint">MOUSE: AIM & FLY | LEFT-CLICK or SPACE: SHOOT</div>
 
     <div id="game-over">
         <h1 id="over-title">SHOT DOWN!</h1>
@@ -165,7 +165,7 @@
 
     <script>
         let scene, camera, renderer;
-        let player, playerPropeller;
+        let player;
         let enemies = [];
         let playerBullets = [];
         let enemyBullets = [];
@@ -188,19 +188,17 @@
 
         function init() {
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x2a68c9);
-            scene.fog = new THREE.FogExp2(0x2a68c9, 0.008);
+            scene.background = new THREE.Color(0x1a4899);
+            scene.fog = new THREE.FogExp2(0x1a4899, 0.008);
 
             camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
             camera.position.set(0, 2, 8);
 
-            // Low resolution pixelated WebGL rendering
             renderer = new THREE.WebGLRenderer({ antialias: false });
             renderer.setPixelRatio(0.35); 
             renderer.setSize(window.innerWidth, window.innerHeight);
             document.getElementById('game-container').appendChild(renderer.domElement);
 
-            // Lighting
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
             scene.add(ambientLight);
 
@@ -209,7 +207,7 @@
             scene.add(dirLight);
 
             // Terrain Grid
-            const gridHelper = new THREE.GridHelper(800, 80, 0x00ff66, 0x004411);
+            const gridHelper = new THREE.GridHelper(800, 80, 0x00ff66, 0x003311);
             gridHelper.position.y = -20;
             scene.add(gridHelper);
 
@@ -225,19 +223,18 @@
             document.addEventListener('keyup', (e) => { if (e.code === 'Space') isShooting = false; });
             window.addEventListener('resize', onWindowResize);
 
-            // Spawn initial enemies
+            // Spawn enemy jets
             for(let i = 0; i < 4; i++) {
                 spawnEnemy();
             }
         }
 
-        // Voxel/Pixel Style Airplane Mesh
         function createPlane(colorHex, isPlayer = false) {
             const group = new THREE.Group();
             const bodyMat = new THREE.MeshStandardMaterial({ color: colorHex, flatShading: true });
-            const wingMat = new THREE.MeshStandardMaterial({ color: isPlayer ? 0xffffff : 0x222222, flatShading: true });
+            const wingMat = new THREE.MeshStandardMaterial({ color: isPlayer ? 0xffffff : 0x111111, flatShading: true });
 
-            // Fuselage
+            // Body
             const body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 2.5), bodyMat);
             group.add(body);
 
@@ -328,7 +325,6 @@
             player.rotation.z = -(targetX - player.position.x) * 0.2;
             player.rotation.x = (targetY - player.position.y) * 0.15;
 
-            // Firing Logic
             const now = Date.now();
             if (isShooting && now - lastShootTime > 120) {
                 shootBullet(false);
@@ -342,18 +338,17 @@
             for (let i = enemies.length - 1; i >= 0; i--) {
                 const enemy = enemies[i];
 
-                // Simple Dogfight AI: Move towards player
+                // Fly towards player position
                 const dir = new THREE.Vector3().subVectors(player.position, enemy.position).normalize();
                 enemy.position.add(dir.multiplyScalar(enemy.userData.speed));
                 enemy.lookAt(player.position);
 
-                // NPC Shooting AI
+                // NPC Enemy Shooting
                 if (enemy.position.distanceTo(player.position) < 80 && now - enemy.userData.lastShot > 1500) {
                     shootBullet(true, enemy);
                     enemy.userData.lastShot = now + Math.random() * 500;
                 }
 
-                // Respawn enemy if passed player
                 if (enemy.position.z > camera.position.z + 10) {
                     scene.remove(enemy);
                     enemies.splice(i, 1);
@@ -368,7 +363,6 @@
                 const b = playerBullets[i];
                 b.position.add(b.userData.velocity);
 
-                // Check collision with Enemies
                 for (let j = enemies.length - 1; j >= 0; j--) {
                     const enemy = enemies[j];
                     if (b.position.distanceTo(enemy.position) < 2.0) {
@@ -400,7 +394,6 @@
                 const b = enemyBullets[i];
                 b.position.add(b.userData.velocity);
 
-                // Hit Player
                 if (b.position.distanceTo(player.position) < 1.5) {
                     playerHealth -= 10;
                     document.getElementById('health-bar').style.width = Math.max(0, playerHealth) + '%';
@@ -420,7 +413,7 @@
                 }
             }
 
-            // Explosions Particle animation
+            // Explosions
             for (let i = particles.length - 1; i >= 0; i--) {
                 const p = particles[i];
                 p.position.add(p.userData.vel);
@@ -441,7 +434,6 @@
         }
 
         function resetGame() {
-            // Clean active objects
             [...enemies, ...playerBullets, ...enemyBullets, ...particles].forEach(obj => scene.remove(obj));
             enemies = [];
             playerBullets = [];
