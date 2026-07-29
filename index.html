@@ -3,213 +3,68 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retro Pixel Dogfight - Camera Follow Fixed</title>
+    <title>Retro Pixel Dogfight</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            overflow: hidden;
-            background-color: #050505;
-            font-family: 'Press Start 2P', monospace;
-            user-select: none;
-        }
-
-        #game-container {
-            width: 100vw;
-            height: 100vh;
-            image-rendering: pixelated;
-            image-rendering: crisp-edges;
-        }
-
-        /* CRT Filter */
-        #crt-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
-                        linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
-            background-size: 100% 4px, 6px 100%;
-            pointer-events: none;
-            box-shadow: inset 0 0 100px rgba(0,0,0,0.8);
-            z-index: 5;
-        }
-
-        /* Top Bar UI */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { overflow: hidden; background-color: #000; font-family: 'Press Start 2P', monospace; user-select: none; }
+        #game-container { width: 100vw; height: 100vh; }
+        
         #ui {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            color: #ffffff;
-            font-size: 14px;
-            text-shadow: 2px 2px 0px #000;
-            pointer-events: none;
-            z-index: 10;
+            position: absolute; top: 20px; left: 20px; color: #fff; font-size: 14px; z-index: 10;
         }
+        #health-bar-container { width: 180px; height: 14px; border: 2px solid #fff; margin-top: 8px; background: #222; }
+        #health-bar { width: 100%; height: 100%; background-color: #00ff66; transition: width 0.1s; }
 
-        #health-bar-container {
-            width: 180px;
-            height: 14px;
-            border: 2px solid #fff;
-            margin-top: 8px;
-            background: #222;
-        }
-
-        #health-bar {
-            width: 100%;
-            height: 100%;
-            background-color: #00ff66;
-            transition: width 0.1s;
-        }
-
-        /* Flight HUD Instrument Panel */
         #hud-panel {
-            position: absolute;
-            bottom: 20px;
-            left: 20px;
-            background: rgba(0, 0, 0, 0.75);
-            border: 3px solid #555;
-            padding: 12px;
-            color: #00ff66;
-            font-size: 10px;
-            z-index: 10;
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 10px;
-            box-shadow: 4px 4px 0px #000;
+            position: absolute; bottom: 20px; left: 20px; background: rgba(0, 0, 0, 0.8);
+            border: 2px solid #00ff66; padding: 10px; color: #00ff66; font-size: 10px; z-index: 10;
+            display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;
         }
-
-        .gauge-box {
-            border: 1px solid #00ff66;
-            padding: 6px;
-            background: #111;
-        }
-
-        .gauge-title {
-            color: #aaa;
-            font-size: 8px;
-            margin-bottom: 4px;
-        }
-
-        .gauge-value {
-            font-size: 12px;
-            color: #fff;
-        }
-
+        .gauge-box { border: 1px solid #333; padding: 6px; background: #111; }
+        .gauge-title { color: #888; font-size: 8px; margin-bottom: 4px; }
+        .gauge-value { font-size: 11px; color: #fff; }
         .engine-on { color: #00ff66 !important; }
         .engine-off { color: #ff3333 !important; }
 
         #crosshair {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 24px;
-            height: 24px;
-            transform: translate(-50%, -50%);
-            border: 2px solid rgba(0, 255, 102, 0.8);
-            border-radius: 50%;
-            pointer-events: none;
-            z-index: 10;
-        }
-
-        #crosshair::after {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 4px;
-            height: 4px;
-            background: #00ff66;
-            transform: translate(-50%, -50%);
+            position: absolute; top: 50%; left: 50%; width: 20px; height: 20px;
+            transform: translate(-50%, -50%); border: 2px solid rgba(0, 255, 102, 0.8);
+            border-radius: 50%; pointer-events: none; z-index: 10;
         }
 
         #controls-hint {
-            position: absolute;
-            bottom: 15px;
-            right: 20px;
-            color: #aaa;
-            font-size: 9px;
-            text-align: right;
-            line-height: 1.6;
-            text-shadow: 2px 2px 0px #000;
-            pointer-events: none;
-            z-index: 10;
+            position: absolute; bottom: 20px; right: 20px; color: #aaa; font-size: 9px;
+            text-align: right; line-height: 1.6; z-index: 10;
         }
 
         #game-over {
-            display: none;
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            text-align: center;
-            color: white;
-            background: rgba(10, 10, 10, 0.95);
-            padding: 40px;
-            border: 4px solid #ffffff;
-            box-shadow: 10px 10px 0px #000;
-            z-index: 20;
+            display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            text-align: center; color: white; background: rgba(10, 10, 10, 0.95); padding: 40px;
+            border: 4px solid #fff; z-index: 20;
         }
-
-        #game-over h1 {
-            font-size: 28px;
-            color: #ff3333;
-            margin-bottom: 20px;
-            text-shadow: 3px 3px 0px #000;
-        }
-
+        #game-over h1 { font-size: 24px; color: #ff3333; margin-bottom: 20px; }
         #restart-btn {
-            font-family: 'Press Start 2P', monospace;
-            padding: 15px 25px;
-            font-size: 12px;
-            color: #000;
-            background-color: #00ff66;
-            border: 4px solid #ffffff;
-            cursor: pointer;
-            box-shadow: 4px 4px 0px #000;
-            margin-top: 20px;
+            font-family: 'Press Start 2P', monospace; padding: 12px 20px; font-size: 12px;
+            color: #000; background-color: #00ff66; border: none; cursor: pointer; margin-top: 20px;
         }
-
-        #restart-btn:hover { background-color: #00cc52; }
     </style>
 </head>
 <body>
 
     <div id="game-container"></div>
-    <div id="crt-overlay"></div>
     <div id="crosshair"></div>
 
     <div id="ui">
         <div>KILLS: <span id="score">0</span></div>
-        <div id="health-bar-container">
-            <div id="health-bar"></div>
-        </div>
+        <div id="health-bar-container"><div id="health-bar"></div></div>
     </div>
 
-    <!-- HUD Instrument Panel -->
     <div id="hud-panel">
-        <div class="gauge-box">
-            <div class="gauge-title">ENGINE [E]</div>
-            <div id="hud-engine" class="gauge-value engine-on">ON</div>
-        </div>
-        <div class="gauge-box">
-            <div class="gauge-title">SPEED</div>
-            <div id="hud-speed" class="gauge-value">120 SPD</div>
-        </div>
-        <div class="gauge-box">
-            <div class="gauge-title">ALTITUDE</div>
-            <div id="hud-alt" class="gauge-value">250 FT</div>
-        </div>
-        <div class="gauge-box">
-            <div class="gauge-title">TIME</div>
-            <div id="hud-time" class="gauge-value">DAY</div>
-        </div>
+        <div class="gauge-box"><div class="gauge-title">ENGINE [E]</div><div id="hud-engine" class="gauge-value engine-on">ON</div></div>
+        <div class="gauge-box"><div class="gauge-title">SPEED</div><div id="hud-speed" class="gauge-value">100 SPD</div></div>
+        <div class="gauge-box"><div class="gauge-title">ALTITUDE</div><div id="hud-alt" class="gauge-value">250 FT</div></div>
+        <div class="gauge-box"><div class="gauge-title">TIME</div><div id="hud-time" class="gauge-value">DAY</div></div>
     </div>
 
     <div id="controls-hint">
@@ -240,34 +95,25 @@
         let playerHealth = 100;
         let isGameOver = false;
 
-        // Flight Physics Variables
         let speed = 0.5;
         let maxSpeed = 0.9;
         let minSpeed = 0.1;
         let isEngineOn = true;
         let pitch = 0, roll = 0;
 
-        // Key states
         const keys = { KeyW: false, KeyS: false, KeyA: false, KeyD: false, ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false, Space: false };
-
-        // Day/Night Cycle Variable
         let dayTime = 0;
 
-        // Web Audio Procedural Sound Engine
         let audioCtx, engineOsc, engineGain;
 
         function initAudio() {
             if (audioCtx) return;
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            
             engineOsc = audioCtx.createOscillator();
             engineGain = audioCtx.createGain();
-
             engineOsc.type = 'sawtooth';
             engineOsc.frequency.setValueAtTime(60, audioCtx.currentTime);
-
             engineGain.gain.setValueAtTime(0.05, audioCtx.currentTime);
-
             engineOsc.connect(engineGain);
             engineGain.connect(audioCtx.destination);
             engineOsc.start();
@@ -283,85 +129,53 @@
             }
         }
 
-        // Texture Generator
-        function generatePixelTexture(type) {
-            const canvas = document.createElement('canvas');
-            canvas.width = 16;
-            canvas.height = 16;
-            const ctx = canvas.getContext('2d');
-
-            for (let x = 0; x < 16; x++) {
-                for (let y = 0; y < 16; y++) {
-                    let noise = (Math.random() - 0.5) * 30;
-                    if (type === 'grass') ctx.fillStyle = `rgb(${40 + noise}, ${150 + noise}, ${40 + noise})`;
-                    else if (type === 'wood') ctx.fillStyle = `rgb(${160 + noise}, ${110 + noise}, ${60 + noise})`;
-                    else if (type === 'red_wool') ctx.fillStyle = `rgb(${180 + noise}, ${30 + noise}, ${30 + noise})`;
-                    else if (type === 'obsidian') ctx.fillStyle = `rgb(${30 + noise}, ${20 + noise}, ${40 + noise})`;
-                    ctx.fillRect(x, y, 1, 1);
-                }
-            }
-
-            const texture = new THREE.CanvasTexture(canvas);
-            texture.magFilter = THREE.NearestFilter;
-            texture.minFilter = THREE.NearestFilter;
-            return texture;
-        }
-
-        const textures = {};
-
         init();
         animate();
 
         function init() {
             scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x7ec0ee);
             scene.fog = new THREE.FogExp2(0x7ec0ee, 0.005);
 
             camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
 
-            renderer = new THREE.WebGLRenderer({ antialias: false });
-            renderer.setPixelRatio(0.35); 
+            renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             document.getElementById('game-container').appendChild(renderer.domElement);
 
-            textures.grass = generatePixelTexture('grass');
-            textures.wood = generatePixelTexture('wood');
-            textures.red = generatePixelTexture('red_wool');
-            textures.obsidian = generatePixelTexture('obsidian');
-
-            // Lighting Setup for Day/Night Cycle
-            ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
             scene.add(ambientLight);
 
             sunLight = new THREE.DirectionalLight(0xffffff, 0.8);
-            sunLight.position.set(0, 100, 0);
+            sunLight.position.set(50, 100, 50);
             scene.add(sunLight);
 
-            createBlockyTerrain();
+            createTerrain();
 
-            // Create Player Plane
-            player = createPlane(textures.wood, textures.grass, true);
+            // Create Player Plane (Green/Blue)
+            player = createPlane(0x2e7d32, 0x1565c0, true);
+            player.position.set(0, 0, 0);
             scene.add(player);
 
-            // FIX: Attach Camera directly to the Player Plane so it tracks automatically
+            // Attach Camera behind Player Plane
+            camera.position.set(0, 3, 8);
+            camera.lookAt(0, 0, -5);
             player.add(camera);
-            camera.position.set(0, 2.5, 7.5); // Positioned directly behind and slightly above the plane
-            camera.lookAt(new THREE.Vector3(0, 0, -10)); // Look forward past the nose of the plane
 
-            // Controls
             window.addEventListener('keydown', onKeyDown);
             window.addEventListener('keyup', onKeyUp);
             window.addEventListener('resize', onWindowResize);
 
-            for(let i = 0; i < 4; i++) spawnEnemy();
+            for (let i = 0; i < 4; i++) spawnEnemy();
         }
 
-        function createBlockyTerrain() {
+        function createTerrain() {
             const groundGroup = new THREE.Group();
             const geo = new THREE.BoxGeometry(6, 6, 6);
-            const mat = new THREE.MeshStandardMaterial({ map: textures.grass, flatShading: true });
+            const mat = new THREE.MeshLambertMaterial({ color: 0x4caf50 });
 
-            for(let x = -120; x <= 120; x += 6) {
-                for(let z = -250; z <= 100; z += 6) {
+            for (let x = -120; x <= 120; x += 6) {
+                for (let z = -300; z <= 100; z += 6) {
                     const block = new THREE.Mesh(geo, mat);
                     block.position.set(x, -25, z);
                     groundGroup.add(block);
@@ -370,10 +184,10 @@
             scene.add(groundGroup);
         }
 
-        function createPlane(bodyTex, wingTex, isPlayer = false) {
+        function createPlane(bodyColor, wingColor, isPlayer = false) {
             const group = new THREE.Group();
-            const bodyMat = new THREE.MeshStandardMaterial({ map: bodyTex, flatShading: true });
-            const wingMat = new THREE.MeshStandardMaterial({ map: wingTex, flatShading: true });
+            const bodyMat = new THREE.MeshLambertMaterial({ color: bodyColor });
+            const wingMat = new THREE.MeshLambertMaterial({ color: wingColor });
 
             const body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 2.5), bodyMat);
             group.add(body);
@@ -398,7 +212,7 @@
         }
 
         function spawnEnemy() {
-            const enemy = createPlane(textures.red, textures.obsidian);
+            const enemy = createPlane(0xc62828, 0x37474f);
             enemy.position.set(
                 (Math.random() - 0.5) * 80,
                 Math.random() * 20 + 5,
@@ -413,7 +227,6 @@
             initAudio();
             if (keys.hasOwnProperty(e.code)) keys[e.code] = true;
 
-            // Toggle Engine Key [E]
             if (e.code === 'KeyE') {
                 isEngineOn = !isEngineOn;
                 const engineHUD = document.getElementById('hud-engine');
@@ -435,17 +248,15 @@
         let lastShootTime = 0;
 
         function updatePlayer() {
-            // Engine Thrust and Glide Mechanics
             if (isEngineOn) {
                 if (keys.KeyW || keys.ArrowUp) speed = Math.min(maxSpeed, speed + 0.01);
                 if (keys.KeyS || keys.ArrowDown) speed = Math.max(minSpeed, speed - 0.01);
-                playerPropeller.rotation.z += speed * 2;
+                if (playerPropeller) playerPropeller.rotation.z += speed * 2;
             } else {
                 speed = Math.max(0, speed - 0.005);
-                player.position.y -= 0.08; // Gravity drop when engine is off
+                player.position.y -= 0.08;
             }
 
-            // Keyboard Direction Controls
             if (keys.KeyA || keys.ArrowLeft) roll = Math.min(0.6, roll + 0.05);
             else if (keys.KeyD || keys.ArrowRight) roll = Math.max(-0.6, roll - 0.05);
             else roll *= 0.9;
@@ -460,19 +271,16 @@
             player.rotation.z = roll;
             player.rotation.x = pitch;
 
-            // Ground Crash Check
             if (player.position.y < -20) {
                 triggerGameOver("CRASHED INTO TERRAIN!");
             }
 
-            // Firing Cannon
             const now = Date.now();
             if (keys.Space && now - lastShootTime > 120) {
                 shootBullet(false);
                 lastShootTime = now;
             }
 
-            // HUD Gauges Update
             document.getElementById('hud-speed').innerText = Math.round(speed * 200) + ' SPD';
             document.getElementById('hud-alt').innerText = Math.round((player.position.y + 25) * 10) + ' FT';
         }
@@ -498,7 +306,6 @@
 
         function updateDayNightCycle() {
             dayTime += 0.0005;
-            
             const sunY = Math.sin(dayTime);
             const sunZ = Math.cos(dayTime);
             sunLight.position.set(0, sunY * 100, sunZ * 100);
@@ -520,7 +327,6 @@
             const now = Date.now();
             for (let i = enemies.length - 1; i >= 0; i--) {
                 const enemy = enemies[i];
-
                 const dir = new THREE.Vector3().subVectors(player.position, enemy.position).normalize();
                 enemy.position.add(dir.multiplyScalar(enemy.userData.speed));
                 enemy.lookAt(player.position);
@@ -539,7 +345,6 @@
         }
 
         function updateProjectiles() {
-            // Player Bullets
             for (let i = playerBullets.length - 1; i >= 0; i--) {
                 const b = playerBullets[i];
                 b.position.add(b.userData.velocity);
@@ -570,7 +375,6 @@
                 }
             }
 
-            // Enemy Bullets
             for (let i = enemyBullets.length - 1; i >= 0; i--) {
                 const b = enemyBullets[i];
                 b.position.add(b.userData.velocity);
@@ -594,7 +398,6 @@
                 }
             }
 
-            // Particle Explosions
             for (let i = particles.length - 1; i >= 0; i--) {
                 const p = particles[i];
                 p.position.add(p.userData.vel);
@@ -609,10 +412,10 @@
         }
 
         function createExplosion(pos) {
-            for(let i = 0; i < 12; i++) {
+            for(let i = 0; i < 10; i++) {
                 const p = new THREE.Mesh(
                     new THREE.BoxGeometry(0.4, 0.4, 0.4),
-                    new THREE.MeshStandardMaterial({ map: textures.red })
+                    new THREE.MeshBasicMaterial({ color: 0xff3300 })
                 );
                 p.position.copy(pos);
                 p.userData = {
