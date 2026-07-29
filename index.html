@@ -1,413 +1,292 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Minecraft-style Plane Dogfight (Demo)</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    html,body { height:100%; margin:0; overflow:hidden; background:#87CEEB; font-family: Arial, sans-serif; }
-    #ui {
-      position: absolute; left: 12px; top: 12px; z-index: 10;
-      display: flex; flex-direction: column; gap:8px;
-    }
-    .btn {
-      background: rgba(0,0,0,0.6); color: #fff; padding:8px 10px; border-radius:6px; cursor: pointer;
-      user-select:none; font-size:14px;
-    }
-    .btn.toggle { background: rgba(20,120,20,0.9); }
-    #hud {
-      position: absolute; right: 12px; top: 12px; z-index: 10;
-      background: rgba(0,0,0,0.5); color: #fff; padding:10px; border-radius:6px; min-width:160px;
-    }
-    #instructions {
-      position: absolute; left:12px; bottom:12px; z-index:10; color:#fff; background:rgba(0,0,0,0.35);
-      padding:8px; border-radius:6px; font-size:13px; max-width:360px;
-    }
-    canvas { display:block; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Flight Flight Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            user-select: none;
+            background-color: #1a1a1a;
+        }
+        #game-container {
+            width: 100vw;
+            height: 100vh;
+        }
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #ffffff;
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7);
+            pointer-events: none;
+        }
+        #game-over {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: white;
+            background: rgba(0, 0, 0, 0.85);
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+        #game-over h1 {
+            font-size: 48px;
+            color: #ff4757;
+            margin-bottom: 10px;
+        }
+        #game-over p {
+            font-size: 20px;
+            margin-bottom: 20px;
+        }
+        #restart-btn {
+            padding: 12px 24px;
+            font-size: 18px;
+            font-weight: bold;
+            color: white;
+            background-color: #2ed573;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        #restart-btn:hover {
+            background-color: #26af5f;
+        }
+    </style>
 </head>
 <body>
-  <div id="ui">
-    <div id="engineBtn" class="btn">Engine: OFF (Q)</div>
-    <div id="cameraBtn" class="btn">Camera: 3rd (C)</div>
-    <div style="display:flex; gap:8px;">
-      <div id="takeoffBtn" class="btn">Takeoff (T)</div>
-      <div id="landBtn" class="btn">Land (L)</div>
-      <div id="resetBtn" class="btn">Reset (R)</div>
+
+    <div id="game-container"></div>
+    <div id="ui">Score: <span id="score">0</span></div>
+    
+    <div id="game-over">
+        <h1>GAME OVER</h1>
+        <p>Final Score: <span id="final-score">0</span></p>
+        <button id="restart-btn" onclick="resetGame()">Play Again</button>
     </div>
-  </div>
-  <div id="hud">
-    <div>Speed: <span id="speed">0</span> m/s</div>
-    <div>Altitude: <span id="alt">0</span> m</div>
-    <div>Engine: <span id="engState">OFF</span></div>
-    <div>Status: <span id="status">Ready</span></div>
-  </div>
-  <div id="instructions">
-    Controls: W/S throttle, A/D turn, Arrow Up/Down pitch, Space fire, Q engine toggle, C camera, T takeoff, L land, R reset.<br>
-    This is a demo — tweak constants in the source for different handling.
-  </div>
 
-  <!-- Three.js -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/OrbitControls.js"></script>
+    <!-- Include Three.js library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
-  <script>
-  // Basic "Minecraft-like" plane dogfight demo
-  // Single-file HTML using Three.js. Not a full sim; simplified physics & AI for demo purposes.
+    <script>
+        let scene, camera, renderer;
+        let airplane, propeller;
+        let obstacles = [];
+        let score = 0;
+        let isGameOver = false;
 
-  // Scene setup
-  const scene = new THREE.Scene();
-  scene.fog = new THREE.FogExp2(0x87CEEB, 0.0008);
+        // Target plane orientation based on mouse move
+        let targetX = 0;
+        let targetY = 0;
 
-  const renderer = new THREE.WebGLRenderer({antialias:true});
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setClearColor(0x87CEEB);
-  document.body.appendChild(renderer.domElement);
+        // Mouse sensitivity boundary
+        const windowHalfX = window.innerWidth / 2;
+        const windowHalfY = window.innerHeight / 2;
 
-  const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 5000);
-  camera.position.set(0, 25, 80);
+        init();
+        animate();
 
-  const orbit = new THREE.OrbitControls(camera, renderer.domElement);
-  orbit.enableDamping = true;
-  orbit.enabled = true;
+        function init() {
+            // 1. Scene setup
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xcce0ff);
+            scene.fog = new THREE.FogExp2(0xcce0ff, 0.015);
 
-  // Lights
-  const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 0.9);
-  hemi.position.set(0, 200, 0);
-  scene.add(hemi);
-  const dir = new THREE.DirectionalLight(0xffffff, 0.7);
-  dir.position.set(-100, 200, 100);
-  scene.add(dir);
+            // 2. Camera setup
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 2, 10);
 
-  // Simple blocky ground (grid of cubes)
-  const ground = new THREE.Group();
-  const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x4f8f3b });
-  const blockGeom = new THREE.BoxGeometry(10,10,10);
-  const gridRadius = 40; // 40x40 blocks => 400x400
-  for (let x=-gridRadius; x<=gridRadius; x++){
-    for (let z=-gridRadius; z<=gridRadius; z++){
-      const mesh = new THREE.Mesh(blockGeom, groundMaterial);
-      // height variation like Minecraft hills
-      const height = Math.floor(Math.sin(x*0.6)*Math.cos(z*0.6) * 2);
-      mesh.position.set(x*10, -5 + height*10, z*10);
-      ground.add(mesh);
-    }
-  }
-  scene.add(ground);
+            // 3. Renderer setup
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            document.getElementById('game-container').appendChild(renderer.domElement);
 
-  // Runway: a strip centered on z=0 along x axis
-  const runway = new THREE.Group();
-  const dark = new THREE.MeshLambertMaterial({color:0x222222});
-  for (let i=-40; i<=40; i++){
-    const block = new THREE.Mesh(new THREE.BoxGeometry(10,2,30), dark);
-    block.position.set(i*10, -4.5, 0);
-    runway.add(block);
-  }
-  scene.add(runway);
+            // 4. Lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
 
-  // Simple helper: box maker
-  function mkBox(w,h,d,color){
-    const g = new THREE.BoxGeometry(w,h,d);
-    const m = new THREE.MeshLambertMaterial({color});
-    return new THREE.Mesh(g,m);
-  }
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(100, 100, 50);
+            dirLight.castShadow = true;
+            scene.add(dirLight);
 
-  // Player plane class
-  class Plane {
-    constructor(color=0xffaa00, isNPC=false){
-      this.group = new THREE.Group();
-      const body = mkBox(6,2,14,color);
-      body.position.set(0,0,0);
-      this.group.add(body);
-      const wingL = mkBox(10,1,4,0x555555);
-      wingL.position.set(-8, -0.5, 0);
-      const wingR = wingL.clone(); wingR.position.set(8,-0.5,0);
-      this.group.add(wingL, wingR);
-      const tail = mkBox(2,4,2,0x333333); tail.position.set(0,1, -7);
-      this.group.add(tail);
+            // 5. Create Objects
+            createAirplane();
 
-      // simple bounding radius
-      this.radius = 6;
-
-      scene.add(this.group);
-
-      // physics state
-      this.pos = new THREE.Vector3(0, 10, -200); // start before runway
-      this.vel = new THREE.Vector3(0, 0, 0);
-      this.rot = new THREE.Euler(0,0,0,'YXZ'); // pitch (X), yaw (Y), roll (Z)
-      this.group.position.copy(this.pos);
-      this.group.rotation.copy(this.rot);
-
-      this.engineOn = false;
-      this.throttle = 0; // 0..1
-      this.isNPC = isNPC;
-      this.health = 100;
-      this.dead = false;
-      this.landed = false;
-      this.shootCooldown = 0;
-      this.patrolTarget = null;
-    }
-    update(dt){
-      if (this.dead) return;
-
-      // orientation -> forward vector
-      const forward = new THREE.Vector3(0,0, -1).applyEuler(this.rot).normalize();
-
-      // forces
-      const thrustPower = 150; // tune
-      const thrust = this.engineOn ? forward.clone().multiplyScalar(thrustPower * this.throttle) : new THREE.Vector3(0,0,0);
-
-      // simple lift ~ k * speed * forwardPitchFactor
-      const speed = this.vel.length();
-      const liftCoeff = 0.8;
-      // effective wing angle: negative pitch (nose down) reduces lift; positive pitch gives lift while moving forward
-      const pitch = this.rot.x;
-      const forwardSpeed = Math.max(0, this.vel.dot(forward));
-      const lift = new THREE.Vector3(0, 1, 0).multiplyScalar(liftCoeff * forwardSpeed * Math.max(0, Math.cos(pitch)));
-
-      // gravity
-      const gravity = new THREE.Vector3(0, -9.8 * 10, 0);
-
-      // net force
-      const net = new THREE.Vector3().add(thrust).add(lift).add(gravity);
-
-      // simple mass = 1
-      const accel = net.clone();
-      this.vel.add(accel.multiplyScalar(dt));
-
-      // positional update
-      this.pos.add(this.vel.clone().multiplyScalar(dt));
-
-      // update group transform
-      this.group.position.copy(this.pos);
-      this.group.rotation.copy(this.rot);
-
-      // ground collision & landing
-      const groundY = getGroundHeightAt(this.pos.x, this.pos.z) + 6; // plane belly offset
-      if (this.pos.y <= groundY){
-        // touching ground
-        // if vertical speed down is big -> crash
-        if (this.vel.y < -30 || Math.abs(this.vel.length()) > 60) {
-          this.crash();
-        } else {
-          // gentle landing: stop
-          this.pos.y = groundY;
-          this.vel.set(0,0,0);
-          this.landed = true;
+            // 6. Event listeners
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('touchmove', onTouchMove, { passive: false });
+            window.addEventListener('resize', onWindowResize);
         }
-      } else {
-        this.landed = false;
-      }
 
-      // simple damping
-      this.vel.multiplyScalar(0.999);
+        function createAirplane() {
+            const planeGroup = new THREE.Group();
 
-      // cooldowns
-      this.shootCooldown = Math.max(0, this.shootCooldown - dt);
+            // Fuselage (Body)
+            const bodyGeo = new THREE.ConeGeometry(0.6, 3, 8);
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0xeb4d4b, flatShading: true });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.rotation.x = Math.PI / 2;
+            planeGroup.add(body);
 
-      // NPC behavior
-      if (this.isNPC) this.npcBehavior(dt);
-    }
-    applyControls(input, dt){
-      if (this.dead || this.isNPC) return;
-      // input: object with throttleUp, throttleDown, left, right, pitchUp, pitchDown, fire
-      if (input.engineToggle !== undefined) this.engineOn = input.engineToggle;
-      if (input.throttleUp) this.throttle = Math.min(1, this.throttle + dt * 0.8);
-      if (input.throttleDown) this.throttle = Math.max(0, this.throttle - dt * 0.8);
+            // Wings
+            const wingGeo = new THREE.BoxGeometry(5, 0.1, 1);
+            const wingMat = new THREE.MeshStandardMaterial({ color: 0xf0932b, flatShading: true });
+            const wing = new THREE.Mesh(wingGeo, wingMat);
+            wing.position.set(0, 0, 0.2);
+            planeGroup.add(wing);
 
-      // update pitch and yaw
-      const yawRate = 0.8;
-      const pitchRate = 0.7;
-      if (input.left) this.rot.y += yawRate * dt;
-      if (input.right) this.rot.y -= yawRate * dt;
-      if (input.pitchUp) this.rot.x += pitchRate * dt;
-      if (input.pitchDown) this.rot.x -= pitchRate * dt;
+            // Tail Fin
+            const tailGeo = new THREE.BoxGeometry(0.1, 0.8, 0.8);
+            const tail = new THREE.Mesh(tailGeo, wingMat);
+            tail.position.set(0, 0.5, -1.2);
+            planeGroup.add(tail);
 
-      // clamps
-      this.rot.x = THREE.MathUtils.clamp(this.rot.x, -Math.PI/3, Math.PI/3);
+            // Propeller
+            const propGeo = new THREE.BoxGeometry(1.2, 0.1, 0.05);
+            const propMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
+            propeller = new THREE.Mesh(propGeo, propMat);
+            propeller.position.set(0, 0, 1.5);
+            planeGroup.add(propeller);
 
-      // firing
-      if (input.fire) this.fireBullet();
-    }
-    fireBullet(){
-      if (this.shootCooldown > 0 || this.dead) return;
-      this.shootCooldown = 0.4; // seconds
-      const forward = new THREE.Vector3(0,0,-1).applyEuler(this.rot).normalize();
-      const pos = this.pos.clone().add(forward.clone().multiplyScalar(20)).add(new THREE.Vector3(0,0,0));
-      spawnBullet(pos, forward.multiplyScalar(500), this);
-    }
-    crash(){
-      if (this.dead) return;
-      this.dead = true;
-      spawnExplosion(this.pos.clone());
-      this.health = 0;
-      // remove from scene after some time
-      setTimeout(()=> {
-        scene.remove(this.group);
-      }, 2000);
-    }
-    npcBehavior(dt){
-      // very simple: try to circle around the runway center and occasionally shoot at player
-      if (!this.patrolTarget) {
-        this.patrolTarget = new THREE.Vector3((Math.random()-0.5)*400, 80 + Math.random()*60, (Math.random()-0.5)*400);
-      }
-      // steer toward patrolTarget
-      const toTarget = this.patrolTarget.clone().sub(this.pos);
-      const desiredYaw = Math.atan2(toTarget.x, -toTarget.z); // world heading toward target
-      let yawDiff = desiredYaw - this.rot.y;
-      yawDiff = ((yawDiff + Math.PI) % (Math.PI*2)) - Math.PI;
-      this.rot.y += yawDiff * 0.5 * dt;
-
-      // pitch to climb/descend slightly
-      const desiredPitch = THREE.MathUtils.clamp(-Math.atan2(toTarget.y, toTarget.length()), -0.4, 0.3);
-      this.rot.x += (desiredPitch - this.rot.x) * 0.5 * dt;
-
-      // engine always on for NPCs
-      this.engineOn = true;
-      this.throttle = 0.8;
-
-      // if target reached, pick new
-      if (toTarget.length() < 30) this.patrolTarget = null;
-
-      // try shooting at player if within range and roughly facing player
-      const toPlayer = player.pos.clone().sub(this.pos);
-      const dist = toPlayer.length();
-      if (dist < 900 && this.shootCooldown <= 0) {
-        // aim: small lead based on player's velocity
-        const lead = player.vel.clone().multiplyScalar(0.6);
-        const aim = toPlayer.clone().add(lead);
-        const aimDir = aim.normalize();
-        // check facing
-        const forward = new THREE.Vector3(0,0,-1).applyEuler(this.rot).normalize();
-        if (forward.dot(aimDir) > 0.5) {
-          this.fireBullet();
+            airplane = planeGroup;
+            scene.add(airplane);
         }
-      }
-    }
-  }
 
-  // Basic ground height sampler (from our block grid)
-  function getGroundHeightAt(x,z){
-    // our ground is block grid with amplitude ~20, but simpler: use procedural function to match generation
-    const gx = (x/10);
-    const gz = (z/10);
-    const height = Math.floor(Math.sin(gx*0.6)*Math.cos(gz*0.6) * 2);
-    return -5 + height*10;
-  }
+        function createObstacle() {
+            const size = Math.random() * 1.5 + 1;
+            const geo = new THREE.DodecahedronGeometry(size, 1);
+            const mat = new THREE.MeshStandardMaterial({ color: 0x6c5ce7, flatShading: true });
+            const mesh = new THREE.Mesh(geo, mat);
 
-  // Bullets storage
-  const bullets = [];
-  function spawnBullet(position, velocity, owner){
-    const mat = new THREE.MeshBasicMaterial({color: owner.isNPC ? 0xff4444 : 0xffff66});
-    const g = new THREE.SphereGeometry(1.2, 6, 6);
-    const m = new THREE.Mesh(g, mat);
-    m.position.copy(position);
-    scene.add(m);
-    bullets.push({mesh:m, vel:velocity.clone(), owner});
-  }
+            // Position obstacle ahead of the plane with slight random variation
+            mesh.position.x = (Math.random() - 0.5) * 20;
+            mesh.position.y = (Math.random() - 0.5) * 12;
+            mesh.position.z = -100;
 
-  function updateBullets(dt){
-    for (let i=bullets.length-1;i>=0;i--){
-      const b = bullets[i];
-      b.mesh.position.add(b.vel.clone().multiplyScalar(dt));
-      // lifetime / distance cap
-      if (b.mesh.position.length() > 5000) {
-        scene.remove(b.mesh); bullets.splice(i,1); continue;
-      }
-      // collision with player
-      if (b.owner !== player && !player.dead) {
-        const d = b.mesh.position.distanceTo(player.pos);
-        if (d < player.radius + 1.2) {
-          // hit player
-          scene.remove(b.mesh); bullets.splice(i,1);
-          player.health -= 50;
-          if (player.health <= 0) player.crash();
-          continue;
+            // Give it random rotation speeds
+            mesh.userData = {
+                rotX: (Math.random() - 0.5) * 0.05,
+                rotY: (Math.random() - 0.5) * 0.05
+            };
+
+            scene.add(mesh);
+            obstacles.push(mesh);
         }
-      }
-      // collision with NPCs
-      for (const n of npcs){
-        if (b.owner !== n && !n.dead) {
-          const d = b.mesh.position.distanceTo(n.pos);
-          if (d < n.radius + 1.2) {
-            scene.remove(b.mesh); bullets.splice(i,1);
-            n.health -= 50;
-            if (n.health <= 0) n.crash();
-            break;
-          }
+
+        function onMouseMove(event) {
+            targetX = ((event.clientX - windowHalfX) / windowHalfX) * 8;
+            targetY = -((event.clientY - windowHalfY) / windowHalfY) * 5;
         }
-      }
-    }
-  }
 
-  // Explosion (particle-ish)
-  const explosions = [];
-  function spawnExplosion(pos){
-    const parts = [];
-    for (let i=0;i<30;i++){
-      const g = new THREE.SphereGeometry(0.8 + Math.random()*0.8, 6,6);
-      const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({color:0xffaa00}));
-      m.position.copy(pos);
-      scene.add(m);
-      const vel = new THREE.Vector3((Math.random()-0.5)*120,(Math.random()*80),(Math.random()-0.5)*120);
-      parts.push({mesh:m, vel, life:1.5});
-    }
-    explosions.push(...parts);
-    setTimeout(()=> {
-      for (const p of parts) if (p.mesh.parent) scene.remove(p.mesh);
-    }, 2000);
-  }
-  function updateExplosions(dt){
-    for (let i=explosions.length-1;i>=0;i--){
-      const p = explosions[i];
-      p.mesh.position.add(p.vel.clone().multiplyScalar(dt));
-      p.vel.y -= 180 * dt; // gravity on particles
-      p.life -= dt;
-      if (p.life <= 0) {
-        if (p.mesh.parent) scene.remove(p.mesh);
-        explosions.splice(i,1);
-      }
-    }
-  }
+        function onTouchMove(event) {
+            if (event.touches.length > 0) {
+                targetX = ((event.touches[0].clientX - windowHalfX) / windowHalfX) * 8;
+                targetY = -((event.touches[0].clientY - windowHalfY) / windowHalfY) * 5;
+            }
+        }
 
-  // Player & NPCs
-  const player = new Plane(0x00aaff, false);
-  player.pos.set(0, getGroundHeightAt(0, -50) + 10, -50);
-  player.group.position.copy(player.pos);
-  player.radius = 6;
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
 
-  const npcs = [];
-  // spawn a few NPCs
-  for (let i=0;i<4;i++){
-    const n = new Plane(0xff4444, true);
-    n.pos.set((Math.random()-0.5)*800, 60 + Math.random()*80, (Math.random()-0.5)*800);
-    n.group.position.copy(n.pos);
-    n.throttle = 0.8;
-    n.engineOn = true;
-    npcs.push(n);
-  }
+        function updateAirplane() {
+            // Smooth motion (lerp) toward target position
+            airplane.position.x += (targetX - airplane.position.x) * 0.1;
+            airplane.position.y += (targetY - airplane.position.y) * 0.1;
 
-  // Input handling
-  const inputState = {
-    throttleUp:false, throttleDown:false, left:false, right:false,
-    pitchUp:false, pitchDown:false, fire:false, engineToggle:false
-  };
-  const keys = {};
-  window.addEventListener('keydown', (e)=> {
-    if (e.code === 'KeyW'){ inputState.throttleUp = true; }
-    if (e.code === 'KeyS'){ inputState.throttleDown = true; }
-    if (e.code === 'KeyA'){ inputState.left = true; }
-    if (e.code === 'KeyD'){ inputState.right = true; }
-    if (e.code === 'ArrowUp'){ inputState.pitchDown = true; }
-    if (e.code === 'ArrowDown'){ inputState.pitchUp = true; }
-    if (e.code === 'Space'){ inputState.fire = true; }
-    if (e.code === 'KeyQ'){ toggleEngine(); }
-    if (e.code === 'KeyC'){ toggleCamera(); }
-    if (e.code === 'KeyT'){ attemptTakeoff(); }
-    if (e.code === 'KeyL'){ attemptLand(); }
-    if (e.code === 'KeyR'){ resetPlayer(); }
-  });
-  window.addEventListener('keyup', (e)=> {
-    if (e.code === 'KeyW'){ inputState.throttleUp = false; }
-    if (e.code === 'KeyS'){ inputState.throttleDown = false; }
-    if (e.code
+            // Bank/tilt plane dynamically based on movement
+            airplane.rotation.z = -(targetX - airplane.position.x) * 0.3;
+            airplane.rotation.x = (targetY - airplane.position.y) * 0.2;
+
+            // Spin propeller
+            propeller.rotation.z += 0.4;
+        }
+
+        function updateObstacles() {
+            // Spawn obstacles
+            if (Math.random() < 0.05) {
+                createObstacle();
+            }
+
+            const speed = 0.8 + score * 0.005; // Gradually speeds up
+
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const obs = obstacles[i];
+                obs.position.z += speed;
+
+                // Rotate obstacle
+                obs.rotation.x += obs.userData.rotX;
+                obs.rotation.y += obs.userData.rotY;
+
+                // Collision detection via distance check
+                const dist = airplane.position.distanceTo(obs.position);
+                if (dist < 1.8) {
+                    triggerGameOver();
+                }
+
+                // Remove offscreen obstacles and add score
+                if (obs.position.z > camera.position.z) {
+                    scene.remove(obs);
+                    obstacles.splice(i, 1);
+                    score += 10;
+                    document.getElementById('score').innerText = score;
+                }
+            }
+        }
+
+        function triggerGameOver() {
+            isGameOver = true;
+            document.getElementById('final-score').innerText = score;
+            document.getElementById('game-over').style.display = 'block';
+        }
+
+        function resetGame() {
+            // Clear existing obstacles
+            for (let obs of obstacles) {
+                scene.remove(obs);
+            }
+            obstacles = [];
+
+            // Reset stats
+            score = 0;
+            isGameOver = false;
+            document.getElementById('score').innerText = score;
+            document.getElementById('game-over').style.display = 'none';
+
+            // Reset plane
+            airplane.position.set(0, 0, 0);
+            targetX = 0;
+            targetY = 0;
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (!isGameOver) {
+                updateAirplane();
+                updateObstacles();
+            }
+
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>
