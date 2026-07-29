@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retro Pixel Dogfight - Enhanced Flight Sim</title>
+    <title>Retro Pixel Dogfight - Camera Follow Fixed</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
         * {
@@ -245,13 +245,13 @@
         let maxSpeed = 0.9;
         let minSpeed = 0.1;
         let isEngineOn = true;
-        let pitch = 0, roll = 0, yaw = 0;
+        let pitch = 0, roll = 0;
 
         // Key states
         const keys = { KeyW: false, KeyS: false, KeyA: false, KeyD: false, ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false, Space: false };
 
         // Day/Night Cycle Variable
-        let dayTime = 0; // 0 to 2PI
+        let dayTime = 0;
 
         // Web Audio Procedural Sound Engine
         let audioCtx, engineOsc, engineGain;
@@ -317,7 +317,6 @@
             scene.fog = new THREE.FogExp2(0x7ec0ee, 0.005);
 
             camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(0, 2, 8);
 
             renderer = new THREE.WebGLRenderer({ antialias: false });
             renderer.setPixelRatio(0.35); 
@@ -339,8 +338,14 @@
 
             createBlockyTerrain();
 
+            // Create Player Plane
             player = createPlane(textures.wood, textures.grass, true);
             scene.add(player);
+
+            // FIX: Attach Camera directly to the Player Plane so it tracks automatically
+            player.add(camera);
+            camera.position.set(0, 2.5, 7.5); // Positioned directly behind and slightly above the plane
+            camera.lookAt(new THREE.Vector3(0, 0, -10)); // Look forward past the nose of the plane
 
             // Controls
             window.addEventListener('keydown', onKeyDown);
@@ -436,7 +441,7 @@
                 if (keys.KeyS || keys.ArrowDown) speed = Math.max(minSpeed, speed - 0.01);
                 playerPropeller.rotation.z += speed * 2;
             } else {
-                speed = Math.max(0, speed - 0.005); // Glide deceleration
+                speed = Math.max(0, speed - 0.005);
                 player.position.y -= 0.08; // Gravity drop when engine is off
             }
 
@@ -492,21 +497,18 @@
         }
 
         function updateDayNightCycle() {
-            dayTime += 0.0005; // Cycle progression rate
+            dayTime += 0.0005;
             
             const sunY = Math.sin(dayTime);
             const sunZ = Math.cos(dayTime);
             sunLight.position.set(0, sunY * 100, sunZ * 100);
 
-            // Sky Color interpolation
             if (sunY > 0) {
-                // Day Time
                 scene.background.setHSL(0.58, 0.7, 0.5 * sunY + 0.2);
                 scene.fog.color.setHSL(0.58, 0.7, 0.5 * sunY + 0.2);
                 ambientLight.intensity = Math.max(0.3, sunY * 0.8);
                 document.getElementById('hud-time').innerText = "DAY";
             } else {
-                // Night Time
                 scene.background.setHSL(0.65, 0.8, 0.05);
                 scene.fog.color.setHSL(0.65, 0.8, 0.05);
                 ambientLight.intensity = 0.15;
@@ -528,7 +530,7 @@
                     enemy.userData.lastShot = now;
                 }
 
-                if (enemy.position.z > camera.position.z + 10) {
+                if (enemy.position.z > player.position.z + 20) {
                     scene.remove(enemy);
                     enemies.splice(i, 1);
                     spawnEnemy();
@@ -562,7 +564,7 @@
                     }
                 }
 
-                if (b && b.position.z < -160) {
+                if (b && b.position.z < player.position.z - 160) {
                     scene.remove(b);
                     playerBullets.splice(i, 1);
                 }
@@ -586,7 +588,7 @@
                     continue;
                 }
 
-                if (b.position.z > camera.position.z + 10) {
+                if (b.position.z > player.position.z + 20) {
                     scene.remove(b);
                     enemyBullets.splice(i, 1);
                 }
