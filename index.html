@@ -9,9 +9,19 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { overflow: hidden; background-color: #000; font-family: 'Press Start 2P', monospace; user-select: none; }
         
-        #game-wrapper { width: 100vw; height: 100vh; display: flex; position: relative; }
+        #game-wrapper { width: 100vw; height: 100vh; display: flex; position: absolute; top: 0; left: 0; z-index: 1; pointer-events: none; }
         .viewport { position: relative; flex: 1; height: 100%; overflow: hidden; border-right: 2px solid #222; }
         
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw !important;
+            height: 100vh !important;
+            z-index: 0;
+            display: block;
+        }
+
         #builder-screen {
             position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
             background: rgba(15, 15, 20, 0.95); z-index: 100; display: flex;
@@ -39,7 +49,7 @@
         .health-bar { width: 100%; height: 100%; background-color: #00ff66; }
 
         .hud-panel {
-            position: absolute; bottom: 15px; left: 15px; background: rgba(0, 0, 0, 0.85);
+            position: absolute; bottom: 80px; left: 15px; background: rgba(0, 0, 0, 0.85);
             border: 2px solid #00ff66; padding: 8px; color: #00ff66; font-size: 8px; z-index: 10;
             display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
         }
@@ -57,8 +67,8 @@
         }
 
         #controls-hint {
-            position: absolute; bottom: 15px; right: 15px; color: #aaa; font-size: 7px;
-            text-align: right; line-height: 1.5; z-index: 10; background: rgba(0,0,0,0.85); padding: 8px; border: 1px solid #444;
+            position: absolute; bottom: 10px; left: 15px; right: 15px; color: #aaa; font-size: 7px;
+            text-align: center; line-height: 1.5; z-index: 10; background: rgba(0,0,0,0.85); padding: 8px; border: 1px solid #444;
         }
 
         #game-over {
@@ -75,7 +85,7 @@
 </head>
 <body>
 
-    <div id="builder-screen" style="display: none;">
+    <div id="builder-screen" style="display: flex;">
         <h1>HANGAR & FLIGHT CONFIG</h1>
         <div class="builder-box">
             <div class="option-row">
@@ -139,7 +149,7 @@
 
     <div id="controls-hint">
         P1: W/S (Throttle) | A/D (Roll) | ARROWS (Pitch) | SPACE (Cannon) | B (Nuke) | SHIFT (Brake) | CTRL (Rev Thrust) | G (Gear)<br>
-        P2: I/K (Throttle) | J/L (Roll) | T/G (Pitch) | H (Cannon) | V (Nuke) | R (Brake) | F (Rev Thrust) | N (Gear)
+        P2: I/K (Throttle) | J/L (Roll) | Y/H (Pitch) | U (Cannon) | V (Nuke) | R (Brake) | F (Rev Thrust) | N (Gear)
     </div>
 
     <div id="game-over">
@@ -185,6 +195,7 @@
 
             initGame();
             animate();
+            onWindowResize();
         }
 
         function setupCamera(plane) {
@@ -264,7 +275,6 @@
         }
 
         function createWorldEnvironment() {
-            // Ocean Base
             const oceanGeo = new THREE.PlaneGeometry(1200, 1200);
             const oceanMat = new THREE.MeshLambertMaterial({ color: 0x1e3a8a });
             const ocean = new THREE.Mesh(oceanGeo, oceanMat);
@@ -272,14 +282,12 @@
             ocean.position.y = GROUND_LEVEL - 4;
             scene.add(ocean);
 
-            // Terrain Landmass
             const groundGroup = new THREE.Group();
             const geo = new THREE.BoxGeometry(10, 10, 10);
             const mat = new THREE.MeshLambertMaterial({ color: 0x22c55e });
 
             for (let x = -MAP_BOUNDS; x <= MAP_BOUNDS; x += 10) {
                 for (let z = -MAP_BOUNDS; z <= MAP_BOUNDS; z += 10) {
-                    // Create an island shape rather than infinite plane
                     if (Math.hypot(x, z) < MAP_BOUNDS - 20) {
                         const block = new THREE.Mesh(geo, mat);
                         block.position.set(x, GROUND_LEVEL - 5, z);
@@ -289,7 +297,6 @@
             }
             scene.add(groundGroup);
 
-            // Mountain Ranges
             const mountainGroup = new THREE.Group();
             const rockMat = new THREE.MeshLambertMaterial({ color: 0x4b5563 });
             const snowMat = new THREE.MeshLambertMaterial({ color: 0xf3f4f6 });
@@ -308,9 +315,9 @@
                     const currentRadius = m.radius * (1 - i / layers);
                     const layerHeight = 6;
                     const y = GROUND_LEVEL + i * layerHeight;
-                    const mat = (i > layers - 3) ? snowMat : rockMat;
+                    const matLayer = (i > layers - 3) ? snowMat : rockMat;
 
-                    const layerMesh = new THREE.Mesh(new THREE.BoxGeometry(currentRadius * 2, layerHeight, currentRadius * 2), mat);
+                    const layerMesh = new THREE.Mesh(new THREE.BoxGeometry(currentRadius * 2, layerHeight, currentRadius * 2), matLayer);
                     layerMesh.position.set(m.x, y, m.z);
                     mountainGroup.add(layerMesh);
                 }
@@ -473,9 +480,9 @@
                 const down = isP1 ? keys.KeyS : keys.KeyK;
                 const left = isP1 ? keys.KeyA : keys.KeyJ;
                 const right = isP1 ? keys.KeyD : keys.KeyL;
-                const pitchUp = isP1 ? keys.ArrowDown : keys.KeyG;
-                const pitchDown = isP1 ? keys.ArrowUp : keys.KeyT;
-                const shoot = isP1 ? keys.Space : keys.KeyH;
+                const pitchUp = isP1 ? keys.ArrowDown : keys.KeyH;
+                const pitchDown = isP1 ? keys.ArrowUp : keys.KeyY;
+                const shoot = isP1 ? keys.Space : keys.KeyU;
                 const nuke = isP1 ? keys.KeyB : keys.KeyV;
                 const airbrake = isP1 ? keys.ShiftLeft || keys.ShiftRight : keys.KeyR;
                 const reverseThrust = isP1 ? keys.ControlLeft || keys.ControlRight : keys.KeyF;
@@ -557,19 +564,16 @@
                 p.mesh.position.add(fwd.multiplyScalar(p.forwardSpeed));
                 p.mesh.position.y += p.verticalVelocity;
 
-                // Airspace bounds enforcement
                 if (Math.abs(p.mesh.position.x) > MAP_BOUNDS || Math.abs(p.mesh.position.z) > MAP_BOUNDS) {
                     p.mesh.rotation.y += 0.03;
                 }
 
-                // Fixed Floor Collision & Belly Landing Logic
                 if (p.mesh.position.y <= GROUND_LEVEL) {
                     p.mesh.position.y = GROUND_LEVEL;
                     p.verticalVelocity = 0;
                     p.mesh.rotation.x *= 0.5;
                     p.mesh.rotation.z *= 0.5;
 
-                    // Only take damage if landing gear is UP and moving fast
                     if (!p.gearDown && Math.abs(p.forwardSpeed) > 0.15) {
                         p.health -= 0.8;
                         updateHealthUI(p);
@@ -820,10 +824,10 @@
         }
 
         function onWindowResize() {
+            if (!renderer) return;
             const vpWidth = getViewportWidth();
             players.forEach(p => {
                 p.camera.aspect = vpWidth / window.innerHeight;
-                p.camera.updatePositionMatrix && p.camera.updatePositionMatrix();
                 p.camera.updateProjectionMatrix();
             });
             renderer.setSize(window.innerWidth, window.innerHeight);
@@ -862,7 +866,6 @@
 
             renderSplitScreen();
         }
-
     </script>
 </body>
 </html>
