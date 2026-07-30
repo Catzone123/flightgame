@@ -32,7 +32,7 @@
             background: #111; border: 3px solid #00ff66; padding: 25px; width: 450px;
             display: flex; flex-direction: column; gap: 15px; margin-bottom: 20px;
         }
-        .option-row { display: flex; justify-space-between: center; align-items: center; font-size: 10px; }
+        .option-row { display: flex; justify-content: space-between; align-items: center; font-size: 10px; }
         .option-row label { color: #aaa; }
         .option-row input, .option-row select {
             background: #222; border: 1px solid #00ff66; color: #fff;
@@ -148,8 +148,8 @@
     </div>
 
     <div id="controls-hint">
-        P1: W/S (Throttle) | A/D (Roll) | ARROWS (Pitch) | SPACE (Cannon) | B (Nuke) | SHIFT (Brake) | CTRL (Rev Thrust) | G (Gear)<br>
-        P2: I/K (Throttle) | J/L (Roll) | Y/H (Pitch) | U (Cannon) | V (Nuke) | R (Brake) | F (Rev Thrust) | N (Gear)
+        P1: W/S (Throttle) | A/D (Roll) | Q/E (Yaw / Turn) | ARROWS (Pitch) | SPACE (Cannon) | B (Nuke) | SHIFT (Brake) | CTRL (Rev) | G (Gear)<br>
+        P2: I/K (Throttle) | J/L (Roll) | U/O (Yaw / Turn) | Y/H (Pitch) | P (Cannon) | V (Nuke) | R (Brake) | F (Rev) | N (Gear)
     </div>
 
     <div id="game-over">
@@ -478,11 +478,13 @@
                 const isP1 = (p.id === 1);
                 const up = isP1 ? keys.KeyW : keys.KeyI;
                 const down = isP1 ? keys.KeyS : keys.KeyK;
-                const left = isP1 ? keys.KeyA : keys.KeyJ;
-                const right = isP1 ? keys.KeyD : keys.KeyL;
+                const rollLeft = isP1 ? keys.KeyA : keys.KeyJ;
+                const rollRight = isP1 ? keys.KeyD : keys.KeyL;
+                const yawLeft = isP1 ? keys.KeyQ : keys.KeyU;
+                const yawRight = isP1 ? keys.KeyE : keys.KeyO;
                 const pitchUp = isP1 ? keys.ArrowDown : keys.KeyH;
                 const pitchDown = isP1 ? keys.ArrowUp : keys.KeyY;
-                const shoot = isP1 ? keys.Space : keys.KeyU;
+                const shoot = isP1 ? keys.Space : keys.KeyP;
                 const nuke = isP1 ? keys.KeyB : keys.KeyV;
                 const airbrake = isP1 ? keys.ShiftLeft || keys.ShiftRight : keys.KeyR;
                 const reverseThrust = isP1 ? keys.ControlLeft || keys.ControlRight : keys.KeyF;
@@ -546,18 +548,29 @@
 
                 const controlAuth = Math.min(1.0, Math.abs(p.forwardSpeed) / STALL_SPEED);
 
-                if (pitchDown) p.pitchRate = Math.max(-0.03, p.pitchRate - 0.003 * controlAuth);
-                else if (pitchUp) p.pitchRate = Math.min(0.03, p.pitchRate + 0.003 * controlAuth);
+                // Pitch
+                if (pitchDown) p.pitchRate = Math.max(-0.025, p.pitchRate - 0.002 * controlAuth);
+                else if (pitchUp) p.pitchRate = Math.min(0.025, p.pitchRate + 0.002 * controlAuth);
                 else p.pitchRate *= 0.85;
 
-                if (left) p.rollRate = Math.min(0.05, p.rollRate + 0.004 * controlAuth);
-                else if (right) p.rollRate = Math.max(-0.05, p.rollRate - 0.004 * controlAuth);
-                else p.rollRate *= 0.85;
+                // Roll (Smoothed out to prevent death loops)
+                if (rollLeft) p.rollRate = Math.min(0.03, p.rollRate + 0.003 * controlAuth);
+                else if (rollRight) p.rollRate = Math.max(-0.03, p.rollRate - 0.003 * controlAuth);
+                else {
+                    p.rollRate *= 0.8;
+                    // Auto self-leveling roll back towards flat
+                    p.mesh.rotation.z *= 0.92;
+                }
+
+                // Dedicated Yaw / Rudder control
+                if (yawLeft) p.yawRate = Math.min(0.02, p.yawRate + 0.002 * controlAuth);
+                else if (yawRight) p.yawRate = Math.max(-0.02, p.yawRate - 0.002 * controlAuth);
+                else {
+                    p.yawRate = -p.mesh.rotation.z * 0.015 * controlAuth; // Banked turns auto-yaw slightly
+                }
 
                 p.mesh.rotation.x += p.pitchRate;
                 p.mesh.rotation.z += p.rollRate;
-
-                p.yawRate = -p.mesh.rotation.z * 0.02 * controlAuth;
                 p.mesh.rotation.y += p.yawRate;
 
                 const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(p.mesh.quaternion);
