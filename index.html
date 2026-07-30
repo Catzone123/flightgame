@@ -186,7 +186,7 @@
         let bombs = [];
         let particles = [];
         let clouds = [];
-        let oceanMesh;
+        let terrainMesh, oceanMesh;
 
         let airportsList = [];
         let enemyBasesList = [];
@@ -199,7 +199,6 @@
         let peer = null;
         let conn = null;
         let myPlayerIndex = 0; // 0 for P1/Host, 1 for P2/Joiner
-        let remotePlayerObj = null;
 
         const GROUND_LEVEL = -21.2;
         const SPAWN_ALTITUDE = GROUND_LEVEL + 1.2;
@@ -306,7 +305,7 @@
         }
 
         function setupCamera(plane) {
-            const camera = new THREE.PerspectiveCamera(60, getViewportWidth() / window.innerHeight, 0.1, 2500);
+            const camera = new THREE.PerspectiveCamera(60, getViewportWidth() / window.innerHeight, 0.1, 4000);
             camera.position.set(0, 3.5, 12);
             plane.add(camera);
             camera.rotation.set(-0.1, 0, 0);
@@ -315,8 +314,8 @@
 
         function initGame() {
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x60a5fa);
-            scene.fog = new THREE.FogExp2(0x60a5fa, 0.0008);
+            scene.background = new THREE.Color(0x38bdf8);
+            scene.fog = new THREE.FogExp2(0x38bdf8, 0.00035);
 
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
@@ -329,7 +328,7 @@
             sunLight.position.set(100, 400, 100);
             scene.add(sunLight);
 
-            createEndlessOcean();
+            createWorldTerrain();
             generate370Airports();
             generateEnemyBases();
             createClouds();
@@ -384,12 +383,21 @@
             return (gameMode === '2P_LOCAL') ? window.innerWidth / 2 : window.innerWidth;
         }
 
-        function createEndlessOcean() {
-            const oceanGeo = new THREE.PlaneGeometry(10000, 10000);
+        function createWorldTerrain() {
+            // Main Grass Field / Land plane
+            const landGeo = new THREE.PlaneGeometry(25000, 25000);
+            const landMat = new THREE.MeshLambertMaterial({ color: 0x3a7d44 });
+            terrainMesh = new THREE.Mesh(landGeo, landMat);
+            terrainMesh.rotation.x = -Math.PI / 2;
+            terrainMesh.position.y = GROUND_LEVEL;
+            scene.add(terrainMesh);
+
+            // Surrounding Ocean
+            const oceanGeo = new THREE.PlaneGeometry(50000, 50000);
             const oceanMat = new THREE.MeshLambertMaterial({ color: 0x1e3a8a });
             oceanMesh = new THREE.Mesh(oceanGeo, oceanMat);
             oceanMesh.rotation.x = -Math.PI / 2;
-            oceanMesh.position.y = GROUND_LEVEL - 4;
+            oceanMesh.position.y = GROUND_LEVEL - 1.0;
             scene.add(oceanMesh);
         }
 
@@ -397,6 +405,7 @@
             const runwayMat = new THREE.MeshLambertMaterial({ color: 0x1f2937 });
             const stripeMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
             const hangarMat = new THREE.MeshLambertMaterial({ color: 0x6b7280 });
+            const apronMat = new THREE.MeshLambertMaterial({ color: 0x4b5563 });
 
             let count = 0;
             const step = 800;
@@ -412,6 +421,10 @@
                     const airport = new THREE.Group();
                     airport.position.set(posX, GROUND_LEVEL + 0.1, posZ);
                     airport.rotation.y = rotation;
+
+                    const apron = new THREE.Mesh(new THREE.BoxGeometry(100, 0.1, 200), apronMat);
+                    apron.position.set(0, -0.05, 0);
+                    airport.add(apron);
 
                     const runway = new THREE.Mesh(new THREE.BoxGeometry(24, 0.2, 180), runwayMat);
                     airport.add(runway);
@@ -439,8 +452,8 @@
             const towerMat = new THREE.MeshLambertMaterial({ color: 0x374151 });
 
             for (let i = 1; i <= 100; i++) {
-                const posX = (Math.sin(i * 12.3) * 12000);
-                const posZ = (Math.cos(i * 8.7) * 12000);
+                const posX = (Math.sin(i * 12.3) * 11000);
+                const posZ = (Math.cos(i * 8.7) * 11000);
 
                 const baseGroup = new THREE.Group();
                 baseGroup.position.set(posX, GROUND_LEVEL + 0.1, posZ);
@@ -595,7 +608,6 @@
             players.forEach((p, idx) => {
                 if (!p || p.health <= 0) return;
 
-                // Only process physics for local controlled planes
                 const isMyPlane = (idx === myPlayerIndex);
                 const isLocalP2 = (gameMode === '2P_LOCAL' && idx === 1);
 
@@ -732,7 +744,6 @@
                 const altEl = document.getElementById(`${hudPrefix}-hud-alt`);
                 if (altEl) altEl.innerText = Math.max(0, Math.round((p.mesh.position.y - SPAWN_ALTITUDE) * 10)) + ' FT';
 
-                // Send transform updates to online partner
                 if (isMyPlane && conn && conn.open) {
                     conn.send({
                         type: 'sync_transform',
@@ -743,10 +754,19 @@
                 }
             });
 
-            // Keep ocean centered under local player
-            if (oceanMesh && players[myPlayerIndex]) {
-                oceanMesh.position.x = players[myPlayerIndex].mesh.position.x;
-                oceanMesh.position.z = players[myPlayerIndex].mesh.position.z;
+            // Keep land and ocean centered beneath local player
+            if (players[myPlayerIndex]) {
+                const px = players[myPlayerIndex].mesh.position.x;
+                const pz = players[myPlayerIndex].mesh.position.z;
+
+                if (terrainMesh) {
+                    terrainMesh.position.x = px;
+                    terrainMesh.position.z = pz;
+                }
+                if (oceanMesh) {
+                    oceanMesh.position.x = px;
+                    oceanMesh.position.z = pz;
+                }
             }
         }
 
