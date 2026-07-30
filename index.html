@@ -32,7 +32,7 @@
             background: #111; border: 3px solid #00ff66; padding: 25px; width: 450px;
             display: flex; flex-direction: column; gap: 15px; margin-bottom: 20px;
         }
-        .option-row { display: flex; justify-content: space-between; align-items: center; font-size: 10px; }
+        .option-row { display: flex; justify-space-between: center; align-items: center; font-size: 10px; }
         .option-row label { color: #aaa; }
         .option-row input, .option-row select {
             background: #222; border: 1px solid #00ff66; color: #fff;
@@ -176,7 +176,7 @@
         let isMultiplayer = false;
 
         const GROUND_LEVEL = -21.2;
-        const SPAWN_ALTITUDE = GROUND_LEVEL + 0.6;
+        const SPAWN_ALTITUDE = GROUND_LEVEL + 1.2;
         const MAP_BOUNDS = 300;
         const STALL_SPEED = 0.22;
         const GRAVITY = 0.008;
@@ -201,9 +201,9 @@
 
         function setupCamera(plane) {
             const camera = new THREE.PerspectiveCamera(60, getViewportWidth() / window.innerHeight, 0.1, 1500);
-            camera.position.set(0, 4.5, 14);
+            camera.position.set(0, 3.5, 12);
             plane.add(camera);
-            camera.lookAt(new THREE.Vector3(0, 0, -10));
+            camera.rotation.set(-0.1, 0, 0);
             return camera;
         }
 
