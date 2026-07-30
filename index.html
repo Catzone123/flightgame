@@ -75,7 +75,7 @@
 </head>
 <body>
 
-    <div id="builder-screen">
+    <div id="builder-screen" style="display: none;">
         <h1>HANGAR & FLIGHT CONFIG</h1>
         <div class="builder-box">
             <div class="option-row">
@@ -170,7 +170,8 @@
         const keys = {};
 
         function startGame() {
-            const mode = document.getElementById('mode-select').value;
+            const modeSelect = document.getElementById('mode-select');
+            const mode = modeSelect ? modeSelect.value : '1P';
             isMultiplayer = (mode === '2P');
 
             document.getElementById('builder-screen').style.display = 'none';
@@ -199,6 +200,7 @@
 
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
 
             ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
             scene.add(ambientLight);
@@ -211,9 +213,13 @@
             createMountains();
             createAirports();
 
-            const bodyColor = parseInt(document.getElementById('body-color').value.replace('#', '0x'));
-            const wingColor = parseInt(document.getElementById('wing-color').value.replace('#', '0x'));
-            const wingStyle = document.getElementById('wing-style').value;
+            const bodyColorInput = document.getElementById('body-color');
+            const wingColorInput = document.getElementById('wing-color');
+            const wingStyleInput = document.getElementById('wing-style');
+
+            const bodyColor = bodyColorInput ? parseInt(bodyColorInput.value.replace('#', '0x')) : 0x2e7d32;
+            const wingColor = wingColorInput ? parseInt(wingColorInput.value.replace('#', '0x')) : 0x1565c0;
+            const wingStyle = wingStyleInput ? wingStyleInput.value : 'standard';
 
             // Player 1 setup
             const p1Obj = createCustomPlane(bodyColor, wingColor, wingStyle);
@@ -474,15 +480,23 @@
 
                 const hudPrefix = isP1 ? 'p1' : 'p2';
                 
-                document.getElementById(`${hudPrefix}-hud-brake`).innerText = p.isAirbrake ? 'ACTIVE' : 'OFF';
-                document.getElementById(`${hudPrefix}-hud-brake`).className = 'gauge-value ' + (p.isAirbrake ? 'active-status' : '');
+                const brakeEl = document.getElementById(`${hudPrefix}-hud-brake`);
+                if (brakeEl) {
+                    brakeEl.innerText = p.isAirbrake ? 'ACTIVE' : 'OFF';
+                    brakeEl.className = 'gauge-value ' + (p.isAirbrake ? 'active-status' : '');
+                }
                 
-                document.getElementById(`${hudPrefix}-hud-thrust`).innerText = p.isReverseThrust ? 'REVERSE' : 'FORWARD';
-                document.getElementById(`${hudPrefix}-hud-thrust`).className = 'gauge-value ' + (p.isReverseThrust ? 'rev-status' : '');
+                const thrustEl = document.getElementById(`${hudPrefix}-hud-thrust`);
+                if (thrustEl) {
+                    thrustEl.innerText = p.isReverseThrust ? 'REVERSE' : 'FORWARD';
+                    thrustEl.className = 'gauge-value ' + (p.isReverseThrust ? 'rev-status' : '');
+                }
 
                 const gearElement = document.getElementById(`${hudPrefix}-hud-gear`);
-                gearElement.innerText = p.gearDown ? 'DOWN' : 'UP';
-                gearElement.className = 'gauge-value ' + (p.gearDown ? 'gear-down' : 'gear-up');
+                if (gearElement) {
+                    gearElement.innerText = p.gearDown ? 'DOWN' : 'UP';
+                    gearElement.className = 'gauge-value ' + (p.gearDown ? 'gear-down' : 'gear-up');
+                }
 
                 if (isStalling) {
                     p.verticalVelocity -= GRAVITY * 1.5;
@@ -535,8 +549,11 @@
                     setTimeout(() => p.hasNuked = false, 3000);
                 }
 
-                document.getElementById(`${hudPrefix}-hud-speed`).innerText = Math.round(p.forwardSpeed * 200) + ' SPD';
-                document.getElementById(`${hudPrefix}-hud-alt`).innerText = Math.max(0, Math.round((p.mesh.position.y + 22) * 10)) + ' FT';
+                const speedEl = document.getElementById(`${hudPrefix}-hud-speed`);
+                if (speedEl) speedEl.innerText = Math.round(p.forwardSpeed * 200) + ' SPD';
+
+                const altEl = document.getElementById(`${hudPrefix}-hud-alt`);
+                if (altEl) altEl.innerText = Math.max(0, Math.round((p.mesh.position.y + 22) * 10)) + ' FT';
             });
         }
 
@@ -568,8 +585,10 @@
 
         function triggerNukeExplosion(impactPos, owner) {
             const flash = document.getElementById('nuke-flash');
-            flash.style.opacity = '1';
-            setTimeout(() => flash.style.opacity = '0', 300);
+            if (flash) {
+                flash.style.opacity = '1';
+                setTimeout(() => flash.style.opacity = '0', 300);
+            }
 
             for (let i = enemies.length - 1; i >= 0; i--) {
                 const enemy = enemies[i];
@@ -579,7 +598,8 @@
                     enemies.splice(i, 1);
                     owner.score++;
                     totalKills++;
-                    document.getElementById(`p${owner.id}-score`).innerText = owner.score;
+                    const scoreEl = document.getElementById(`p${owner.id}-score`);
+                    if (scoreEl) scoreEl.innerText = owner.score;
                     spawnEnemy();
                 }
             }
@@ -627,7 +647,7 @@
                 let targetPlayer = players[0];
                 let minDist = enemy.position.distanceTo(players[0].mesh.position);
 
-                if (isMultiplayer && players[1].health > 0) {
+                if (isMultiplayer && players[1] && players[1].health > 0) {
                     const dist2 = enemy.position.distanceTo(players[1].mesh.position);
                     if (dist2 < minDist) {
                         targetPlayer = players[1];
@@ -635,7 +655,7 @@
                     }
                 }
 
-                if (minDist < 3.2 && targetPlayer.health > 0) {
+                if (targetPlayer && minDist < 3.2 && targetPlayer.health > 0) {
                     targetPlayer.health -= 20;
                     updateHealthUI(targetPlayer);
                     createExplosion(enemy.position);
@@ -644,13 +664,13 @@
                     enemy.position.add(pushDir.multiplyScalar(5.0));
 
                     checkGameOver();
-                } else if (targetPlayer.health > 0) {
+                } else if (targetPlayer && targetPlayer.health > 0) {
                     const dir = new THREE.Vector3().subVectors(targetPlayer.mesh.position, enemy.position).normalize();
                     enemy.position.add(dir.multiplyScalar(enemy.userData.speed));
                     enemy.lookAt(targetPlayer.mesh.position);
                 }
 
-                if (minDist < 80 && minDist > 8 && now - enemy.userData.lastShot > 1600) {
+                if (targetPlayer && minDist < 80 && minDist > 8 && now - enemy.userData.lastShot > 1600) {
                     shootEnemyBullet(enemy, targetPlayer);
                     enemy.userData.lastShot = now;
                 }
@@ -689,7 +709,8 @@
                             enemies.splice(j, 1);
                             b.userData.owner.score++;
                             totalKills++;
-                            document.getElementById(`p${b.userData.owner.id}-score`).innerText = b.userData.owner.score;
+                            const scoreEl = document.getElementById(`p${b.userData.owner.id}-score`);
+                            if (scoreEl) scoreEl.innerText = b.userData.owner.score;
                             spawnEnemy();
                         }
                         break;
@@ -751,8 +772,10 @@
             const allDead = players.every(p => p.health <= 0);
             if (allDead && !isGameOver) {
                 isGameOver = true;
-                document.getElementById('final-score').innerText = totalKills;
-                document.getElementById('game-over').style.display = 'block';
+                const scoreEl = document.getElementById('final-score');
+                if (scoreEl) scoreEl.innerText = totalKills;
+                const goEl = document.getElementById('game-over');
+                if (goEl) goEl.style.display = 'block';
             }
         }
 
@@ -769,7 +792,7 @@
             const width = window.innerWidth;
             const height = window.innerHeight;
 
-            if (isMultiplayer) {
+            if (isMultiplayer && players.length > 1) {
                 renderer.setViewport(0, 0, width / 2, height);
                 renderer.setScissor(0, 0, width / 2, height);
                 renderer.setScissorTest(true);
@@ -779,7 +802,7 @@
                 renderer.setScissor(width / 2, 0, width / 2, height);
                 renderer.setScissorTest(true);
                 renderer.render(scene, players[1].camera);
-            } else {
+            } else if (players.length > 0) {
                 renderer.setViewport(0, 0, width, height);
                 renderer.setScissorTest(false);
                 renderer.render(scene, players[0].camera);
@@ -798,6 +821,11 @@
 
             renderSplitScreen();
         }
+
+        // Auto-start when loaded
+        window.addEventListener('DOMContentLoaded', () => {
+            startGame();
+        });
     </script>
 </body>
 </html>
