@@ -114,8 +114,8 @@
                 <div class="health-bar-bg"><div id="p1-health" class="health-bar"></div></div>
             </div>
             <div class="hud-panel">
-                <div class="gauge-box"><div class="gauge-title">P1 SPEED</div><div id="p1-hud-speed" class="gauge-value">100 SPD</div></div>
-                <div class="gauge-box"><div class="gauge-title">P1 ALTITUDE</div><div id="p1-hud-alt" class="gauge-value">250 FT</div></div>
+                <div class="gauge-box"><div class="gauge-title">P1 SPEED</div><div id="p1-hud-speed" class="gauge-value">0 SPD</div></div>
+                <div class="gauge-box"><div class="gauge-title">P1 ALTITUDE</div><div id="p1-hud-alt" class="gauge-value">0 FT</div></div>
                 <div class="gauge-box"><div class="gauge-title">GEAR</div><div id="p1-hud-gear" class="gauge-value gear-down">DOWN</div></div>
                 <div class="gauge-box"><div class="gauge-title">AIRBRAKE</div><div id="p1-hud-brake" class="gauge-value">OFF</div></div>
                 <div class="gauge-box"><div class="gauge-title">THRUST</div><div id="p1-hud-thrust" class="gauge-value">FORWARD</div></div>
@@ -128,8 +128,8 @@
                 <div class="health-bar-bg"><div id="p2-health" class="health-bar"></div></div>
             </div>
             <div class="hud-panel">
-                <div class="gauge-box"><div class="gauge-title">P2 SPEED</div><div id="p2-hud-speed" class="gauge-value">100 SPD</div></div>
-                <div class="gauge-box"><div class="gauge-title">P2 ALTITUDE</div><div id="p2-hud-alt" class="gauge-value">250 FT</div></div>
+                <div class="gauge-box"><div class="gauge-title">P2 SPEED</div><div id="p2-hud-speed" class="gauge-value">0 SPD</div></div>
+                <div class="gauge-box"><div class="gauge-title">P2 ALTITUDE</div><div id="p2-hud-alt" class="gauge-value">0 FT</div></div>
                 <div class="gauge-box"><div class="gauge-title">GEAR</div><div id="p2-hud-gear" class="gauge-value gear-down">DOWN</div></div>
                 <div class="gauge-box"><div class="gauge-title">AIRBRAKE</div><div id="p2-hud-brake" class="gauge-value">OFF</div></div>
                 <div class="gauge-box"><div class="gauge-title">THRUST</div><div id="p2-hud-thrust" class="gauge-value">FORWARD</div></div>
@@ -158,12 +158,15 @@
         let enemyBullets = [];
         let bombs = [];
         let particles = [];
+        let clouds = [];
         let sunLight, ambientLight;
 
         let totalKills = 0;
         let isGameOver = false;
         let isMultiplayer = false;
 
+        const GROUND_LEVEL = -21.2;
+        const MAP_BOUNDS = 300;
         const STALL_SPEED = 0.22;
         const GRAVITY = 0.008;
 
@@ -185,8 +188,8 @@
         }
 
         function setupCamera(plane) {
-            const camera = new THREE.PerspectiveCamera(60, getViewportWidth() / window.innerHeight, 0.1, 1000);
-            camera.position.set(0, 3, 8);
+            const camera = new THREE.PerspectiveCamera(60, getViewportWidth() / window.innerHeight, 0.1, 1500);
+            camera.position.set(0, 3.5, 9);
             camera.rotation.set(0, 0, 0);
             plane.add(camera);
             camera.lookAt(new THREE.Vector3(0, 0, -5));
@@ -195,23 +198,23 @@
 
         function initGame() {
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x7ec0ee);
-            scene.fog = new THREE.FogExp2(0x7ec0ee, 0.0035);
+            scene.background = new THREE.Color(0x60a5fa);
+            scene.fog = new THREE.FogExp2(0x60a5fa, 0.002);
 
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             document.body.appendChild(renderer.domElement);
 
-            ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
             scene.add(ambientLight);
 
-            sunLight = new THREE.DirectionalLight(0xffffff, 0.8);
-            sunLight.position.set(50, 100, 50);
+            sunLight = new THREE.DirectionalLight(0xffffff, 0.9);
+            sunLight.position.set(100, 200, 100);
             scene.add(sunLight);
 
-            createTerrain();
-            createMountains();
+            createWorldEnvironment();
             createAirports();
+            createClouds();
 
             const bodyColorInput = document.getElementById('body-color');
             const wingColorInput = document.getElementById('wing-color');
@@ -221,29 +224,29 @@
             const wingColor = wingColorInput ? parseInt(wingColorInput.value.replace('#', '0x')) : 0x1565c0;
             const wingStyle = wingStyleInput ? wingStyleInput.value : 'standard';
 
-            // Player 1 setup
+            // Player 1
             const p1Obj = createCustomPlane(bodyColor, wingColor, wingStyle);
-            p1Obj.position.set(isMultiplayer ? -10 : 0, -21.8, 0);
+            p1Obj.position.set(isMultiplayer ? -10 : 0, GROUND_LEVEL, 0);
             scene.add(p1Obj);
             const cam1 = setupCamera(p1Obj);
 
             players.push({
                 id: 1, mesh: p1Obj, camera: cam1, health: 100, score: 0,
-                throttle: 0.5, forwardSpeed: 0.5, verticalVelocity: 0,
+                throttle: 0.0, forwardSpeed: 0.0, verticalVelocity: 0,
                 pitchRate: 0, rollRate: 0, yawRate: 0, lastShoot: 0,
                 isAirbrake: false, isReverseThrust: false, gearDown: true, lastGearToggle: 0
             });
 
-            // Player 2 setup
+            // Player 2
             if (isMultiplayer) {
                 const p2Obj = createCustomPlane(0xd32f2f, 0xfbc02d, wingStyle);
-                p2Obj.position.set(10, -21.8, 0);
+                p2Obj.position.set(10, GROUND_LEVEL, 0);
                 scene.add(p2Obj);
                 const cam2 = setupCamera(p2Obj);
 
                 players.push({
                     id: 2, mesh: p2Obj, camera: cam2, health: 100, score: 0,
-                    throttle: 0.5, forwardSpeed: 0.5, verticalVelocity: 0,
+                    throttle: 0.0, forwardSpeed: 0.0, verticalVelocity: 0,
                     pitchRate: 0, rollRate: 0, yawRate: 0, lastShoot: 0,
                     isAirbrake: false, isReverseThrust: false, gearDown: true, lastGearToggle: 0
                 });
@@ -260,44 +263,54 @@
             return isMultiplayer ? window.innerWidth / 2 : window.innerWidth;
         }
 
-        function createTerrain() {
-            const groundGroup = new THREE.Group();
-            const geo = new THREE.BoxGeometry(6, 6, 6);
-            const mat = new THREE.MeshLambertMaterial({ color: 0x4caf50 });
+        function createWorldEnvironment() {
+            // Ocean Base
+            const oceanGeo = new THREE.PlaneGeometry(1200, 1200);
+            const oceanMat = new THREE.MeshLambertMaterial({ color: 0x1e3a8a });
+            const ocean = new THREE.Mesh(oceanGeo, oceanMat);
+            ocean.rotation.x = -Math.PI / 2;
+            ocean.position.y = GROUND_LEVEL - 4;
+            scene.add(ocean);
 
-            for (let x = -150; x <= 150; x += 6) {
-                for (let z = -350; z <= 150; z += 6) {
-                    const block = new THREE.Mesh(geo, mat);
-                    block.position.set(x, -25, z);
-                    groundGroup.add(block);
+            // Terrain Landmass
+            const groundGroup = new THREE.Group();
+            const geo = new THREE.BoxGeometry(10, 10, 10);
+            const mat = new THREE.MeshLambertMaterial({ color: 0x22c55e });
+
+            for (let x = -MAP_BOUNDS; x <= MAP_BOUNDS; x += 10) {
+                for (let z = -MAP_BOUNDS; z <= MAP_BOUNDS; z += 10) {
+                    // Create an island shape rather than infinite plane
+                    if (Math.hypot(x, z) < MAP_BOUNDS - 20) {
+                        const block = new THREE.Mesh(geo, mat);
+                        block.position.set(x, GROUND_LEVEL - 5, z);
+                        groundGroup.add(block);
+                    }
                 }
             }
             scene.add(groundGroup);
-        }
 
-        function createMountains() {
+            // Mountain Ranges
             const mountainGroup = new THREE.Group();
-            const rockMat = new THREE.MeshLambertMaterial({ color: 0x5a5a5a });
-            const snowMat = new THREE.MeshLambertMaterial({ color: 0xe0e0e0 });
+            const rockMat = new THREE.MeshLambertMaterial({ color: 0x4b5563 });
+            const snowMat = new THREE.MeshLambertMaterial({ color: 0xf3f4f6 });
 
             const mountainPositions = [
-                { x: -140, z: -150, height: 45, radius: 25 },
-                { x: -90, z: -220, height: 60, radius: 35 },
-                { x: 0, z: -280, height: 85, radius: 45 },
-                { x: 100, z: -200, height: 65, radius: 35 },
-                { x: 150, z: -120, height: 50, radius: 30 }
+                { x: -160, z: -180, height: 80, radius: 45 },
+                { x: -100, z: -240, height: 110, radius: 55 },
+                { x: 0, z: -260, height: 130, radius: 65 },
+                { x: 120, z: -220, height: 95, radius: 50 },
+                { x: 180, z: -140, height: 75, radius: 40 }
             ];
 
             mountainPositions.forEach(m => {
-                const layers = Math.floor(m.height / 4);
+                const layers = Math.floor(m.height / 6);
                 for (let i = 0; i < layers; i++) {
                     const currentRadius = m.radius * (1 - i / layers);
-                    const layerHeight = 4;
-                    const y = -22 + i * layerHeight;
+                    const layerHeight = 6;
+                    const y = GROUND_LEVEL + i * layerHeight;
                     const mat = (i > layers - 3) ? snowMat : rockMat;
 
-                    const geo = new THREE.BoxGeometry(currentRadius * 2, layerHeight, currentRadius * 2);
-                    const layerMesh = new THREE.Mesh(geo, mat);
+                    const layerMesh = new THREE.Mesh(new THREE.BoxGeometry(currentRadius * 2, layerHeight, currentRadius * 2), mat);
                     layerMesh.position.set(m.x, y, m.z);
                     mountainGroup.add(layerMesh);
                 }
@@ -308,40 +321,66 @@
 
         function createAirports() {
             const airportGroup = new THREE.Group();
-            const runwayMat = new THREE.MeshLambertMaterial({ color: 0x333333 });
-            const stripeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-            const hangarMat = new THREE.MeshLambertMaterial({ color: 0x777777 });
+            const runwayMat = new THREE.MeshLambertMaterial({ color: 0x1f2937 });
+            const stripeMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
+            const hangarMat = new THREE.MeshLambertMaterial({ color: 0x6b7280 });
 
             const airportLocations = [
-                { x: 0, z: -20, rot: 0 },
-                { x: -80, z: -180, rot: Math.PI / 4 },
-                { x: 70, z: -100, rot: -Math.PI / 6 }
+                { x: 0, z: 0, rot: 0 },
+                { x: -100, z: -150, rot: Math.PI / 4 },
+                { x: 100, z: -100, rot: -Math.PI / 6 }
             ];
 
             airportLocations.forEach(loc => {
                 const airport = new THREE.Group();
-                airport.position.set(loc.x, -21.9, loc.z);
+                airport.position.set(loc.x, GROUND_LEVEL + 0.1, loc.z);
                 airport.rotation.y = loc.rot;
 
-                const runway = new THREE.Mesh(new THREE.BoxGeometry(16, 0.2, 120), runwayMat);
+                const runway = new THREE.Mesh(new THREE.BoxGeometry(20, 0.2, 160), runwayMat);
                 airport.add(runway);
 
-                for (let z = -50; z <= 50; z += 10) {
-                    const stripe = new THREE.Mesh(new THREE.BoxGeometry(1, 0.25, 5), stripeMat);
+                for (let z = -70; z <= 70; z += 14) {
+                    const stripe = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.25, 6), stripeMat);
                     stripe.position.set(0, 0.05, z);
                     airport.add(stripe);
                 }
 
-                const hangar1 = new THREE.Mesh(new THREE.BoxGeometry(14, 8, 14), hangarMat);
-                hangar1.position.set(18, 4, -30);
-                const hangar2 = new THREE.Mesh(new THREE.BoxGeometry(14, 8, 14), hangarMat);
-                hangar2.position.set(-18, 4, -30);
+                const hangar1 = new THREE.Mesh(new THREE.BoxGeometry(18, 10, 18), hangarMat);
+                hangar1.position.set(22, 5, -40);
+                const hangar2 = new THREE.Mesh(new THREE.BoxGeometry(18, 10, 18), hangarMat);
+                hangar2.position.set(-22, 5, -40);
 
                 airport.add(hangar1, hangar2);
                 airportGroup.add(airport);
             });
 
             scene.add(airportGroup);
+        }
+
+        function createClouds() {
+            const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 });
+            for (let i = 0; i < 40; i++) {
+                const cloud = new THREE.Group();
+                const count = Math.floor(Math.random() * 4) + 3;
+
+                for (let j = 0; j < count; j++) {
+                    const block = new THREE.Mesh(
+                        new THREE.BoxGeometry(15 + Math.random() * 15, 6 + Math.random() * 4, 15 + Math.random() * 15),
+                        cloudMat
+                    );
+                    block.position.set((Math.random() - 0.5) * 20, (Math.random() - 0.5) * 4, (Math.random() - 0.5) * 20);
+                    cloud.add(block);
+                }
+
+                cloud.position.set(
+                    (Math.random() - 0.5) * MAP_BOUNDS * 1.8,
+                    45 + Math.random() * 40,
+                    (Math.random() - 0.5) * MAP_BOUNDS * 1.8
+                );
+
+                scene.add(cloud);
+                clouds.push(cloud);
+            }
         }
 
         function createCustomPlane(bodyColor, wingColor, style) {
@@ -412,11 +451,11 @@
         }
 
         function spawnEnemy() {
-            const enemy = createCustomPlane(0xc62828, 0x37474f, 'standard');
+            const enemy = createCustomPlane(0xd97706, 0xb91c1c, 'standard');
             enemy.position.set(
-                (Math.random() - 0.5) * 120,
-                Math.random() * 20 + 10,
-                -140 - Math.random() * 80
+                (Math.random() - 0.5) * 160,
+                Math.random() * 25 + 15,
+                -120 - Math.random() * 100
             );
             enemy.userData = { health: 30, speed: 0.35 + Math.random() * 0.2, lastShot: 0 };
             scene.add(enemy);
@@ -454,19 +493,11 @@
                 if (up) p.throttle = Math.min(1.0, p.throttle + 0.01);
                 if (down) p.throttle = Math.max(0.0, p.throttle - 0.01);
 
-                let targetSpeed = p.throttle * 0.9 + 0.1;
+                let targetSpeed = p.throttle * 0.9;
                 
-                if (p.isReverseThrust) {
-                    targetSpeed = -p.throttle * 0.4;
-                }
-
-                if (p.isAirbrake) {
-                    targetSpeed *= 0.3;
-                }
-
-                if (p.gearDown && !p.isReverseThrust) {
-                    targetSpeed *= 0.85;
-                }
+                if (p.isReverseThrust) targetSpeed = -p.throttle * 0.3;
+                if (p.isAirbrake) targetSpeed *= 0.3;
+                if (p.gearDown && !p.isReverseThrust) targetSpeed *= 0.85;
 
                 p.forwardSpeed += (targetSpeed - p.forwardSpeed) * (p.isAirbrake ? 0.08 : 0.02);
 
@@ -498,10 +529,12 @@
                     gearElement.className = 'gauge-value ' + (p.gearDown ? 'gear-down' : 'gear-up');
                 }
 
-                if (isStalling) {
+                if (isStalling && p.mesh.position.y > GROUND_LEVEL) {
                     p.verticalVelocity -= GRAVITY * 1.5;
-                } else {
+                } else if (p.mesh.position.y > GROUND_LEVEL) {
                     p.verticalVelocity = calculatedLift - GRAVITY;
+                } else {
+                    p.verticalVelocity = 0;
                 }
 
                 const controlAuth = Math.min(1.0, Math.abs(p.forwardSpeed) / STALL_SPEED);
@@ -524,14 +557,21 @@
                 p.mesh.position.add(fwd.multiplyScalar(p.forwardSpeed));
                 p.mesh.position.y += p.verticalVelocity;
 
-                if (p.mesh.position.y <= -21.8) {
-                    p.mesh.position.y = -21.8;
-                    p.verticalVelocity = 0;
-                    p.mesh.rotation.x *= 0.8;
-                    p.mesh.rotation.z *= 0.8;
+                // Airspace bounds enforcement
+                if (Math.abs(p.mesh.position.x) > MAP_BOUNDS || Math.abs(p.mesh.position.z) > MAP_BOUNDS) {
+                    p.mesh.rotation.y += 0.03;
+                }
 
-                    if (!p.gearDown && Math.abs(p.forwardSpeed) > 0.05) {
-                        p.health -= 0.5;
+                // Fixed Floor Collision & Belly Landing Logic
+                if (p.mesh.position.y <= GROUND_LEVEL) {
+                    p.mesh.position.y = GROUND_LEVEL;
+                    p.verticalVelocity = 0;
+                    p.mesh.rotation.x *= 0.5;
+                    p.mesh.rotation.z *= 0.5;
+
+                    // Only take damage if landing gear is UP and moving fast
+                    if (!p.gearDown && Math.abs(p.forwardSpeed) > 0.15) {
+                        p.health -= 0.8;
                         updateHealthUI(p);
                         createExplosion(p.mesh.position);
                         checkGameOver();
@@ -553,7 +593,7 @@
                 if (speedEl) speedEl.innerText = Math.round(p.forwardSpeed * 200) + ' SPD';
 
                 const altEl = document.getElementById(`${hudPrefix}-hud-alt`);
-                if (altEl) altEl.innerText = Math.max(0, Math.round((p.mesh.position.y + 22) * 10)) + ' FT';
+                if (altEl) altEl.innerText = Math.max(0, Math.round((p.mesh.position.y - GROUND_LEVEL) * 10)) + ' FT';
             });
         }
 
@@ -630,7 +670,7 @@
                 b.userData.velocity.y -= 0.015;
                 b.position.add(b.userData.velocity);
 
-                if (b.position.y <= -22) {
+                if (b.position.y <= GROUND_LEVEL) {
                     triggerNukeExplosion(b.position, b.userData.owner);
                     scene.remove(b);
                     bombs.splice(i, 1);
@@ -783,6 +823,7 @@
             const vpWidth = getViewportWidth();
             players.forEach(p => {
                 p.camera.aspect = vpWidth / window.innerHeight;
+                p.camera.updatePositionMatrix && p.camera.updatePositionMatrix();
                 p.camera.updateProjectionMatrix();
             });
             renderer.setSize(window.innerWidth, window.innerHeight);
@@ -822,10 +863,6 @@
             renderSplitScreen();
         }
 
-        // Auto-start when loaded
-        window.addEventListener('DOMContentLoaded', () => {
-            startGame();
-        });
     </script>
 </body>
 </html>
