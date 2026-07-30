@@ -3,8 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retro Pixel Dogfight - Ultimate Flight Edition</title>
+    <title>Retro Pixel Dogfight - Online Edition</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <!-- PeerJS for WebRTC Multiplayer -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { overflow: hidden; background-color: #000; font-family: 'Press Start 2P', monospace; user-select: none; }
@@ -13,13 +15,7 @@
         .viewport { position: relative; flex: 1; height: 100%; overflow: hidden; border-right: 2px solid #222; }
         
         canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100vw !important;
-            height: 100vh !important;
-            z-index: 0;
-            display: block;
+            position: absolute; top: 0; left: 0; width: 100vw !important; height: 100vh !important; z-index: 0; display: block;
         }
 
         #builder-screen {
@@ -27,22 +23,23 @@
             background: rgba(15, 15, 20, 0.95); z-index: 100; display: flex;
             flex-direction: column; align-items: center; justify-content: center; color: #fff;
         }
-        #builder-screen h1 { color: #00ff66; margin-bottom: 20px; font-size: 20px; text-align: center; }
+        #builder-screen h1 { color: #00ff66; margin-bottom: 20px; font-size: 18px; text-align: center; }
         .builder-box {
-            background: #111; border: 3px solid #00ff66; padding: 25px; width: 450px;
-            display: flex; flex-direction: column; gap: 15px; margin-bottom: 20px;
+            background: #111; border: 3px solid #00ff66; padding: 20px; width: 460px;
+            display: flex; flex-direction: column; gap: 12px; margin-bottom: 15px;
         }
         .option-row { display: flex; justify-content: space-between; align-items: center; font-size: 10px; }
         .option-row label { color: #aaa; }
         .option-row input, .option-row select {
-            background: #222; border: 1px solid #00ff66; color: #fff;
-            padding: 5px; font-family: 'Press Start 2P', monospace; font-size: 10px;
+            background: #222; border: 1px solid #00ff66; color: #fff; padding: 5px; font-family: 'Press Start 2P', monospace; font-size: 10px;
         }
         .start-btn {
-            font-family: 'Press Start 2P', monospace; padding: 15px 30px; font-size: 14px;
+            font-family: 'Press Start 2P', monospace; padding: 12px 25px; font-size: 12px;
             color: #000; background-color: #00ff66; border: none; cursor: pointer; transition: 0.2s;
         }
         .start-btn:hover { background-color: #33ff88; transform: scale(1.05); }
+
+        #room-info { font-size: 10px; color: #ffcc00; margin-top: 5px; text-align: center; }
 
         .hud-ui { position: absolute; top: 15px; left: 15px; color: #fff; font-size: 10px; z-index: 10; }
         .health-bar-bg { width: 140px; height: 12px; border: 2px solid #fff; margin-top: 5px; background: #222; }
@@ -60,6 +57,14 @@
         .rev-status { color: #ff3333 !important; }
         .gear-down { color: #00ff66 !important; }
         .gear-up { color: #ff9900 !important; }
+
+        #territory-warning {
+            position: absolute; top: 50px; width: 100%; text-align: center;
+            color: #ff3333; font-size: 12px; font-weight: bold; text-shadow: 2px 2px #000;
+            display: none; z-index: 30; animation: blink 0.8s infinite;
+        }
+
+        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.2; } 100% { opacity: 1; } }
 
         #nuke-flash {
             position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
@@ -85,16 +90,26 @@
 </head>
 <body>
 
+    <div id="territory-warning">⚠️ WARNING: ENEMY TERRITORY DETECTED ⚠️</div>
+
     <div id="builder-screen" style="display: flex;">
-        <h1>HANGAR & FLIGHT CONFIG</h1>
+        <h1>FLIGHT GAME - MULTIPLAYER</h1>
         <div class="builder-box">
             <div class="option-row">
                 <label>MODE:</label>
-                <select id="mode-select">
+                <select id="mode-select" onchange="toggleMultiplayerUI()">
                     <option value="1P">1 PLAYER (SOLO)</option>
-                    <option value="2P">2 PLAYERS (SPLIT-SCREEN)</option>
+                    <option value="2P_LOCAL">2 PLAYER (SPLIT-SCREEN)</option>
+                    <option value="ONLINE_HOST">ONLINE (HOST ROOM)</option>
+                    <option value="ONLINE_JOIN">ONLINE (JOIN ROOM)</option>
                 </select>
             </div>
+
+            <div class="option-row" id="room-code-row" style="display: none;">
+                <label>ROOM CODE:</label>
+                <input type="text" id="room-code-input" placeholder="ENTER CODE" maxlength="6">
+            </div>
+
             <div class="option-row">
                 <label>FUSELAGE COLOR:</label>
                 <input type="color" id="body-color" value="#2e7d32">
@@ -112,6 +127,8 @@
                 </select>
             </div>
         </div>
+        <div id="room-info"></div>
+        <br>
         <button class="start-btn" onclick="startGame()">SCRAMBLE / START</button>
     </div>
 
@@ -148,8 +165,8 @@
     </div>
 
     <div id="controls-hint">
-        P1: W/S (Throttle) | A/D (Roll) | Q/E (Yaw / Turn) | ARROWS (Pitch) | SPACE (Cannon) | B (Nuke) | SHIFT (Brake) | CTRL (Rev) | G (Gear)<br>
-        P2: I/K (Throttle) | J/L (Roll) | U/O (Yaw / Turn) | Y/H (Pitch) | P (Cannon) | V (Nuke) | R (Brake) | F (Rev) | N (Gear)
+        CONTROLS: W/S (Throttle) | A/D (Roll) | Q/E (Yaw) | ARROWS (Pitch) | SPACE (Cannon) | B (Nuke) | SHIFT (Brake) | CTRL (Rev) | G (Gear)<br>
+        (Local P2 Uses: I/K | J/L | U/O | Y/H | P | V | R | F | N)
     </div>
 
     <div id="game-over">
@@ -169,28 +186,117 @@
         let bombs = [];
         let particles = [];
         let clouds = [];
-        let sunLight, ambientLight;
+        let oceanMesh;
+
+        let airportsList = [];
+        let enemyBasesList = [];
 
         let totalKills = 0;
         let isGameOver = false;
-        let isMultiplayer = false;
+        let gameMode = '1P';
+
+        // Online WebRTC Multiplayer variables
+        let peer = null;
+        let conn = null;
+        let myPlayerIndex = 0; // 0 for P1/Host, 1 for P2/Joiner
+        let remotePlayerObj = null;
 
         const GROUND_LEVEL = -21.2;
         const SPAWN_ALTITUDE = GROUND_LEVEL + 1.2;
-        const MAP_BOUNDS = 300;
         const STALL_SPEED = 0.22;
         const GRAVITY = 0.008;
 
         const keys = {};
 
-        function startGame() {
-            const modeSelect = document.getElementById('mode-select');
-            const mode = modeSelect ? modeSelect.value : '1P';
-            isMultiplayer = (mode === '2P');
+        function toggleMultiplayerUI() {
+            const mode = document.getElementById('mode-select').value;
+            const roomRow = document.getElementById('room-code-row');
+            const roomInfo = document.getElementById('room-info');
+            
+            roomRow.style.display = (mode === 'ONLINE_JOIN') ? 'flex' : 'none';
+            roomInfo.innerText = '';
+        }
 
+        function startGame() {
+            gameMode = document.getElementById('mode-select').value;
+
+            if (gameMode === 'ONLINE_HOST') {
+                initHostOnline();
+            } else if (gameMode === 'ONLINE_JOIN') {
+                initJoinerOnline();
+            } else {
+                launchGame();
+            }
+        }
+
+        function initHostOnline() {
+            const roomInfo = document.getElementById('room-info');
+            roomInfo.innerText = "INITIALIZING HOST...";
+
+            const hostId = "fg-" + Math.floor(1000 + Math.random() * 9000);
+            peer = new Peer(hostId);
+
+            peer.on('open', id => {
+                const code = id.replace("fg-", "");
+                roomInfo.innerText = `ROOM CODE: ${code} (WAITING FOR PLAYER 2...)`;
+            });
+
+            peer.on('connection', connection => {
+                conn = connection;
+                setupNetworkHandlers();
+                roomInfo.innerText = "PLAYER 2 CONNECTED! STARTING...";
+                setTimeout(launchGame, 1000);
+            });
+        }
+
+        function initJoinerOnline() {
+            const roomInfo = document.getElementById('room-info');
+            const inputCode = document.getElementById('room-code-input').value.trim();
+
+            if (!inputCode) {
+                alert("Please enter a Room Code!");
+                return;
+            }
+
+            myPlayerIndex = 1;
+            roomInfo.innerText = "CONNECTING TO HOST...";
+            peer = new Peer();
+
+            peer.on('open', () => {
+                conn = peer.connect("fg-" + inputCode);
+                setupNetworkHandlers();
+
+                conn.on('open', () => {
+                    roomInfo.innerText = "CONNECTED TO HOST! STARTING...";
+                    setTimeout(launchGame, 1000);
+                });
+            });
+        }
+
+        function setupNetworkHandlers() {
+            conn.on('data', data => {
+                if (data.type === 'sync_transform') {
+                    const target = players[1 - myPlayerIndex];
+                    if (target && target.mesh) {
+                        target.mesh.position.set(data.x, data.y, data.z);
+                        target.mesh.quaternion.set(data.qx, data.qy, data.qz, data.qw);
+                        target.gearDown = data.gear;
+                        target.mesh.userData.gear.visible = data.gear;
+                    }
+                } else if (data.type === 'shoot') {
+                    const shooter = players[1 - myPlayerIndex];
+                    if (shooter) shootBullet(shooter);
+                } else if (data.type === 'nuke') {
+                    const shooter = players[1 - myPlayerIndex];
+                    if (shooter) dropAtomBomb(shooter);
+                }
+            });
+        }
+
+        function launchGame() {
             document.getElementById('builder-screen').style.display = 'none';
 
-            if (isMultiplayer) {
+            if (gameMode === '2P_LOCAL') {
                 document.getElementById('view-p2').style.display = 'block';
             }
 
@@ -200,7 +306,7 @@
         }
 
         function setupCamera(plane) {
-            const camera = new THREE.PerspectiveCamera(60, getViewportWidth() / window.innerHeight, 0.1, 1500);
+            const camera = new THREE.PerspectiveCamera(60, getViewportWidth() / window.innerHeight, 0.1, 2500);
             camera.position.set(0, 3.5, 12);
             plane.add(camera);
             camera.rotation.set(-0.1, 0, 0);
@@ -210,21 +316,22 @@
         function initGame() {
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x60a5fa);
-            scene.fog = new THREE.FogExp2(0x60a5fa, 0.002);
+            scene.fog = new THREE.FogExp2(0x60a5fa, 0.0008);
 
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             document.body.appendChild(renderer.domElement);
 
-            ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
             scene.add(ambientLight);
 
-            sunLight = new THREE.DirectionalLight(0xffffff, 0.9);
-            sunLight.position.set(100, 200, 100);
+            const sunLight = new THREE.DirectionalLight(0xffffff, 0.9);
+            sunLight.position.set(100, 400, 100);
             scene.add(sunLight);
 
-            createWorldEnvironment();
-            createAirports();
+            createEndlessOcean();
+            generate370Airports();
+            generateEnemyBases();
             createClouds();
 
             const bodyColorInput = document.getElementById('body-color');
@@ -235,154 +342,145 @@
             const wingColor = wingColorInput ? parseInt(wingColorInput.value.replace('#', '0x')) : 0x1565c0;
             const wingStyle = wingStyleInput ? wingStyleInput.value : 'standard';
 
-            // Player 1
+            // Local Player
             const p1Obj = createCustomPlane(bodyColor, wingColor, wingStyle);
-            p1Obj.position.set(isMultiplayer ? -10 : 0, SPAWN_ALTITUDE, 0);
+            p1Obj.position.set(myPlayerIndex === 1 ? 15 : 0, SPAWN_ALTITUDE, 0);
             scene.add(p1Obj);
             const cam1 = setupCamera(p1Obj);
 
-            players.push({
-                id: 1, mesh: p1Obj, camera: cam1, health: 100, score: 0,
+            players[myPlayerIndex] = {
+                id: myPlayerIndex + 1, mesh: p1Obj, camera: cam1, health: 100, score: 0,
                 throttle: 0.0, forwardSpeed: 0.0, verticalVelocity: 0,
                 pitchRate: 0, rollRate: 0, yawRate: 0, lastShoot: 0,
                 isAirbrake: false, isReverseThrust: false, gearDown: true, lastGearToggle: 0
-            });
+            };
 
-            // Player 2
-            if (isMultiplayer) {
+            // Second Player (Local 2P or Online)
+            if (gameMode === '2P_LOCAL' || gameMode.startsWith('ONLINE')) {
+                const otherIdx = 1 - myPlayerIndex;
                 const p2Obj = createCustomPlane(0xd32f2f, 0xfbc02d, wingStyle);
-                p2Obj.position.set(10, SPAWN_ALTITUDE, 0);
+                p2Obj.position.set(otherIdx === 1 ? 15 : 0, SPAWN_ALTITUDE, 0);
                 scene.add(p2Obj);
-                const cam2 = setupCamera(p2Obj);
 
-                players.push({
-                    id: 2, mesh: p2Obj, camera: cam2, health: 100, score: 0,
+                let cam2 = null;
+                if (gameMode === '2P_LOCAL') {
+                    cam2 = setupCamera(p2Obj);
+                }
+
+                players[otherIdx] = {
+                    id: otherIdx + 1, mesh: p2Obj, camera: cam2, health: 100, score: 0,
                     throttle: 0.0, forwardSpeed: 0.0, verticalVelocity: 0,
                     pitchRate: 0, rollRate: 0, yawRate: 0, lastShoot: 0,
                     isAirbrake: false, isReverseThrust: false, gearDown: true, lastGearToggle: 0
-                });
+                };
             }
 
             window.addEventListener('keydown', e => keys[e.code] = true);
             window.addEventListener('keyup', e => keys[e.code] = false);
             window.addEventListener('resize', onWindowResize);
-
-            for (let i = 0; i < (isMultiplayer ? 6 : 4); i++) spawnEnemy();
         }
 
         function getViewportWidth() {
-            return isMultiplayer ? window.innerWidth / 2 : window.innerWidth;
+            return (gameMode === '2P_LOCAL') ? window.innerWidth / 2 : window.innerWidth;
         }
 
-        function createWorldEnvironment() {
-            const oceanGeo = new THREE.PlaneGeometry(1200, 1200);
+        function createEndlessOcean() {
+            const oceanGeo = new THREE.PlaneGeometry(10000, 10000);
             const oceanMat = new THREE.MeshLambertMaterial({ color: 0x1e3a8a });
-            const ocean = new THREE.Mesh(oceanGeo, oceanMat);
-            ocean.rotation.x = -Math.PI / 2;
-            ocean.position.y = GROUND_LEVEL - 4;
-            scene.add(ocean);
-
-            const groundGroup = new THREE.Group();
-            const geo = new THREE.BoxGeometry(10, 10, 10);
-            const mat = new THREE.MeshLambertMaterial({ color: 0x22c55e });
-
-            for (let x = -MAP_BOUNDS; x <= MAP_BOUNDS; x += 10) {
-                for (let z = -MAP_BOUNDS; z <= MAP_BOUNDS; z += 10) {
-                    if (Math.hypot(x, z) < MAP_BOUNDS - 20) {
-                        const block = new THREE.Mesh(geo, mat);
-                        block.position.set(x, GROUND_LEVEL - 5, z);
-                        groundGroup.add(block);
-                    }
-                }
-            }
-            scene.add(groundGroup);
-
-            const mountainGroup = new THREE.Group();
-            const rockMat = new THREE.MeshLambertMaterial({ color: 0x4b5563 });
-            const snowMat = new THREE.MeshLambertMaterial({ color: 0xf3f4f6 });
-
-            const mountainPositions = [
-                { x: -160, z: -180, height: 80, radius: 45 },
-                { x: -100, z: -240, height: 110, radius: 55 },
-                { x: 0, z: -260, height: 130, radius: 65 },
-                { x: 120, z: -220, height: 95, radius: 50 },
-                { x: 180, z: -140, height: 75, radius: 40 }
-            ];
-
-            mountainPositions.forEach(m => {
-                const layers = Math.floor(m.height / 6);
-                for (let i = 0; i < layers; i++) {
-                    const currentRadius = m.radius * (1 - i / layers);
-                    const layerHeight = 6;
-                    const y = GROUND_LEVEL + i * layerHeight;
-                    const matLayer = (i > layers - 3) ? snowMat : rockMat;
-
-                    const layerMesh = new THREE.Mesh(new THREE.BoxGeometry(currentRadius * 2, layerHeight, currentRadius * 2), matLayer);
-                    layerMesh.position.set(m.x, y, m.z);
-                    mountainGroup.add(layerMesh);
-                }
-            });
-
-            scene.add(mountainGroup);
+            oceanMesh = new THREE.Mesh(oceanGeo, oceanMat);
+            oceanMesh.rotation.x = -Math.PI / 2;
+            oceanMesh.position.y = GROUND_LEVEL - 4;
+            scene.add(oceanMesh);
         }
 
-        function createAirports() {
-            const airportGroup = new THREE.Group();
+        function generate370Airports() {
             const runwayMat = new THREE.MeshLambertMaterial({ color: 0x1f2937 });
             const stripeMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
             const hangarMat = new THREE.MeshLambertMaterial({ color: 0x6b7280 });
 
-            const airportLocations = [
-                { x: 0, z: 0, rot: 0 },
-                { x: -100, z: -150, rot: Math.PI / 4 },
-                { x: 100, z: -100, rot: -Math.PI / 6 }
-            ];
+            let count = 0;
+            const step = 800;
+            const gridSize = 20; 
 
-            airportLocations.forEach(loc => {
-                const airport = new THREE.Group();
-                airport.position.set(loc.x, GROUND_LEVEL + 0.1, loc.z);
-                airport.rotation.y = loc.rot;
+            for (let x = -gridSize; x <= gridSize && count < 370; x++) {
+                for (let z = -gridSize; z <= gridSize && count < 370; z++) {
+                    count++;
+                    const posX = x * step + ((count * 17) % 200);
+                    const posZ = z * step + ((count * 31) % 200);
+                    const rotation = (count * 45) * (Math.PI / 180);
 
-                const runway = new THREE.Mesh(new THREE.BoxGeometry(20, 0.2, 160), runwayMat);
-                airport.add(runway);
+                    const airport = new THREE.Group();
+                    airport.position.set(posX, GROUND_LEVEL + 0.1, posZ);
+                    airport.rotation.y = rotation;
 
-                for (let z = -70; z <= 70; z += 14) {
-                    const stripe = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.25, 6), stripeMat);
-                    stripe.position.set(0, 0.05, z);
-                    airport.add(stripe);
+                    const runway = new THREE.Mesh(new THREE.BoxGeometry(24, 0.2, 180), runwayMat);
+                    airport.add(runway);
+
+                    for (let s = -80; s <= 80; s += 16) {
+                        const stripe = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.25, 7), stripeMat);
+                        stripe.position.set(0, 0.05, s);
+                        airport.add(stripe);
+                    }
+
+                    const hangar1 = new THREE.Mesh(new THREE.BoxGeometry(20, 10, 20), hangarMat);
+                    hangar1.position.set(24, 5, -40);
+                    const hangar2 = new THREE.Mesh(new THREE.BoxGeometry(20, 10, 20), hangarMat);
+                    hangar2.position.set(-24, 5, -40);
+                    airport.add(hangar1, hangar2);
+
+                    scene.add(airport);
+                    airportsList.push({ id: count, pos: new THREE.Vector3(posX, GROUND_LEVEL, posZ) });
                 }
+            }
+        }
 
-                const hangar1 = new THREE.Mesh(new THREE.BoxGeometry(18, 10, 18), hangarMat);
-                hangar1.position.set(22, 5, -40);
-                const hangar2 = new THREE.Mesh(new THREE.BoxGeometry(18, 10, 18), hangarMat);
-                hangar2.position.set(-22, 5, -40);
+        function generateEnemyBases() {
+            const baseMat = new THREE.MeshLambertMaterial({ color: 0xb91c1c });
+            const towerMat = new THREE.MeshLambertMaterial({ color: 0x374151 });
 
-                airport.add(hangar1, hangar2);
-                airportGroup.add(airport);
-            });
+            for (let i = 1; i <= 100; i++) {
+                const posX = (Math.sin(i * 12.3) * 12000);
+                const posZ = (Math.cos(i * 8.7) * 12000);
 
-            scene.add(airportGroup);
+                const baseGroup = new THREE.Group();
+                baseGroup.position.set(posX, GROUND_LEVEL + 0.1, posZ);
+
+                const platform = new THREE.Mesh(new THREE.BoxGeometry(100, 0.2, 100), baseMat);
+                baseGroup.add(platform);
+
+                const tower = new THREE.Mesh(new THREE.BoxGeometry(12, 40, 12), towerMat);
+                tower.position.set(0, 20, 0);
+                baseGroup.add(tower);
+
+                scene.add(baseGroup);
+
+                enemyBasesList.push({
+                    pos: new THREE.Vector3(posX, GROUND_LEVEL, posZ),
+                    radius: 450,
+                    activeEnemies: 0
+                });
+            }
         }
 
         function createClouds() {
             const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 });
-            for (let i = 0; i < 40; i++) {
+            for (let i = 0; i < 150; i++) {
                 const cloud = new THREE.Group();
                 const count = Math.floor(Math.random() * 4) + 3;
 
                 for (let j = 0; j < count; j++) {
                     const block = new THREE.Mesh(
-                        new THREE.BoxGeometry(15 + Math.random() * 15, 6 + Math.random() * 4, 15 + Math.random() * 15),
+                        new THREE.BoxGeometry(20 + Math.random() * 20, 8 + Math.random() * 5, 20 + Math.random() * 20),
                         cloudMat
                     );
-                    block.position.set((Math.random() - 0.5) * 20, (Math.random() - 0.5) * 4, (Math.random() - 0.5) * 20);
+                    block.position.set((Math.random() - 0.5) * 30, (Math.random() - 0.5) * 6, (Math.random() - 0.5) * 30);
                     cloud.add(block);
                 }
 
                 cloud.position.set(
-                    (Math.random() - 0.5) * MAP_BOUNDS * 1.8,
-                    45 + Math.random() * 40,
-                    (Math.random() - 0.5) * MAP_BOUNDS * 1.8
+                    (Math.random() - 0.5) * 8000,
+                    60 + Math.random() * 60,
+                    (Math.random() - 0.5) * 8000
                 );
 
                 scene.add(cloud);
@@ -429,7 +527,6 @@
             const gearGroup = new THREE.Group();
             const wheelMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
             const strutMat = new THREE.MeshLambertMaterial({ color: 0x888888 });
-
             const wheelGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.15, 8);
             wheelGeo.rotateZ(Math.PI / 2);
 
@@ -457,14 +554,37 @@
             return group;
         }
 
-        function spawnEnemy() {
+        function checkTerritoriesAndSpawn() {
+            let inTerritory = false;
+
+            players.forEach(p => {
+                if (!p || p.health <= 0) return;
+
+                enemyBasesList.forEach(base => {
+                    const dist = p.mesh.position.distanceTo(base.pos);
+
+                    if (dist < base.radius) {
+                        inTerritory = true;
+                        if (base.activeEnemies < 2 && enemies.length < 12) {
+                            spawnEnemyFromBase(base);
+                            base.activeEnemies++;
+                        }
+                    }
+                });
+            });
+
+            const warningEl = document.getElementById('territory-warning');
+            if (warningEl) warningEl.style.display = inTerritory ? 'block' : 'none';
+        }
+
+        function spawnEnemyFromBase(base) {
             const enemy = createCustomPlane(0xd97706, 0xb91c1c, 'standard');
             enemy.position.set(
-                (Math.random() - 0.5) * 160,
-                Math.random() * 25 + 15,
-                -120 - Math.random() * 100
+                base.pos.x + (Math.random() - 0.5) * 60,
+                SPAWN_ALTITUDE + Math.random() * 20 + 10,
+                base.pos.z + (Math.random() - 0.5) * 60
             );
-            enemy.userData = { health: 30, speed: 0.35 + Math.random() * 0.2, lastShot: 0 };
+            enemy.userData = { health: 30, speed: 0.38 + Math.random() * 0.15, lastShot: 0, homeBase: base };
             scene.add(enemy);
             enemies.push(enemy);
         }
@@ -472,10 +592,16 @@
         function updatePlayers() {
             const now = Date.now();
 
-            players.forEach(p => {
-                if (p.health <= 0) return;
+            players.forEach((p, idx) => {
+                if (!p || p.health <= 0) return;
 
-                const isP1 = (p.id === 1);
+                // Only process physics for local controlled planes
+                const isMyPlane = (idx === myPlayerIndex);
+                const isLocalP2 = (gameMode === '2P_LOCAL' && idx === 1);
+
+                if (!isMyPlane && !isLocalP2) return;
+
+                const isP1 = (idx === 0);
                 const up = isP1 ? keys.KeyW : keys.KeyI;
                 const down = isP1 ? keys.KeyS : keys.KeyK;
                 const rollLeft = isP1 ? keys.KeyA : keys.KeyJ;
@@ -518,7 +644,7 @@
                 const calculatedLift = Math.pow(Math.abs(p.forwardSpeed), 2) * 0.015;
                 const isStalling = Math.abs(p.forwardSpeed) < STALL_SPEED;
 
-                const hudPrefix = isP1 ? 'p1' : 'p2';
+                const hudPrefix = (idx === myPlayerIndex) ? 'p1' : 'p2';
                 
                 const brakeEl = document.getElementById(`${hudPrefix}-hud-brake`);
                 if (brakeEl) {
@@ -548,25 +674,21 @@
 
                 const controlAuth = Math.min(1.0, Math.abs(p.forwardSpeed) / STALL_SPEED);
 
-                // Pitch
                 if (pitchDown) p.pitchRate = Math.max(-0.025, p.pitchRate - 0.002 * controlAuth);
                 else if (pitchUp) p.pitchRate = Math.min(0.025, p.pitchRate + 0.002 * controlAuth);
                 else p.pitchRate *= 0.85;
 
-                // Roll (Smoothed out to prevent death loops)
                 if (rollLeft) p.rollRate = Math.min(0.03, p.rollRate + 0.003 * controlAuth);
                 else if (rollRight) p.rollRate = Math.max(-0.03, p.rollRate - 0.003 * controlAuth);
                 else {
                     p.rollRate *= 0.8;
-                    // Auto self-leveling roll back towards flat
                     p.mesh.rotation.z *= 0.92;
                 }
 
-                // Dedicated Yaw / Rudder control
                 if (yawLeft) p.yawRate = Math.min(0.02, p.yawRate + 0.002 * controlAuth);
                 else if (yawRight) p.yawRate = Math.max(-0.02, p.yawRate - 0.002 * controlAuth);
                 else {
-                    p.yawRate = -p.mesh.rotation.z * 0.015 * controlAuth; // Banked turns auto-yaw slightly
+                    p.yawRate = -p.mesh.rotation.z * 0.015 * controlAuth;
                 }
 
                 p.mesh.rotation.x += p.pitchRate;
@@ -576,10 +698,6 @@
                 const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(p.mesh.quaternion);
                 p.mesh.position.add(fwd.multiplyScalar(p.forwardSpeed));
                 p.mesh.position.y += p.verticalVelocity;
-
-                if (Math.abs(p.mesh.position.x) > MAP_BOUNDS || Math.abs(p.mesh.position.z) > MAP_BOUNDS) {
-                    p.mesh.rotation.y += 0.03;
-                }
 
                 if (p.mesh.position.y <= SPAWN_ALTITUDE) {
                     p.mesh.position.y = SPAWN_ALTITUDE;
@@ -598,11 +716,13 @@
                 if (shoot && now - p.lastShoot > 120) {
                     shootBullet(p);
                     p.lastShoot = now;
+                    if (conn && conn.open) conn.send({ type: 'shoot' });
                 }
 
                 if (nuke && !p.hasNuked) {
                     dropAtomBomb(p);
                     p.hasNuked = true;
+                    if (conn && conn.open) conn.send({ type: 'nuke' });
                     setTimeout(() => p.hasNuked = false, 3000);
                 }
 
@@ -611,7 +731,23 @@
 
                 const altEl = document.getElementById(`${hudPrefix}-hud-alt`);
                 if (altEl) altEl.innerText = Math.max(0, Math.round((p.mesh.position.y - SPAWN_ALTITUDE) * 10)) + ' FT';
+
+                // Send transform updates to online partner
+                if (isMyPlane && conn && conn.open) {
+                    conn.send({
+                        type: 'sync_transform',
+                        x: p.mesh.position.x, y: p.mesh.position.y, z: p.mesh.position.z,
+                        qx: p.mesh.quaternion.x, qy: p.mesh.quaternion.y, qz: p.mesh.quaternion.z, qw: p.mesh.quaternion.w,
+                        gear: p.gearDown
+                    });
+                }
             });
+
+            // Keep ocean centered under local player
+            if (oceanMesh && players[myPlayerIndex]) {
+                oceanMesh.position.x = players[myPlayerIndex].mesh.position.x;
+                oceanMesh.position.z = players[myPlayerIndex].mesh.position.z;
+            }
         }
 
         function shootBullet(player) {
@@ -649,15 +785,17 @@
 
             for (let i = enemies.length - 1; i >= 0; i--) {
                 const enemy = enemies[i];
-                if (enemy.position.distanceTo(impactPos) < 120) {
+                if (enemy.position.distanceTo(impactPos) < 140) {
                     createExplosion(enemy.position);
+                    if (enemy.userData.homeBase) enemy.userData.homeBase.activeEnemies--;
                     scene.remove(enemy);
                     enemies.splice(i, 1);
-                    owner.score++;
-                    totalKills++;
-                    const scoreEl = document.getElementById(`p${owner.id}-score`);
-                    if (scoreEl) scoreEl.innerText = owner.score;
-                    spawnEnemy();
+                    if (owner) {
+                        owner.score++;
+                        totalKills++;
+                        const scoreEl = document.getElementById(`p${owner.id}-score`);
+                        if (scoreEl) scoreEl.innerText = owner.score;
+                    }
                 }
             }
 
@@ -702,13 +840,23 @@
                 const enemy = enemies[i];
 
                 let targetPlayer = players[0];
-                let minDist = enemy.position.distanceTo(players[0].mesh.position);
+                let minDist = targetPlayer ? enemy.position.distanceTo(targetPlayer.mesh.position) : Infinity;
 
-                if (isMultiplayer && players[1] && players[1].health > 0) {
+                if (players[1] && players[1].health > 0) {
                     const dist2 = enemy.position.distanceTo(players[1].mesh.position);
                     if (dist2 < minDist) {
                         targetPlayer = players[1];
                         minDist = dist2;
+                    }
+                }
+
+                if (enemy.userData.homeBase && targetPlayer) {
+                    const distToBase = targetPlayer.mesh.position.distanceTo(enemy.userData.homeBase.pos);
+                    if (distToBase > enemy.userData.homeBase.radius + 200) {
+                        enemy.userData.homeBase.activeEnemies--;
+                        scene.remove(enemy);
+                        enemies.splice(i, 1);
+                        continue;
                     }
                 }
 
@@ -727,7 +875,7 @@
                     enemy.lookAt(targetPlayer.mesh.position);
                 }
 
-                if (targetPlayer && minDist < 80 && minDist > 8 && now - enemy.userData.lastShot > 1600) {
+                if (targetPlayer && minDist < 100 && minDist > 8 && now - enemy.userData.lastShot > 1600) {
                     shootEnemyBullet(enemy, targetPlayer);
                     enemy.userData.lastShot = now;
                 }
@@ -762,13 +910,15 @@
 
                         if (enemy.userData.health <= 0) {
                             createExplosion(enemy.position);
+                            if (enemy.userData.homeBase) enemy.userData.homeBase.activeEnemies--;
                             scene.remove(enemy);
                             enemies.splice(j, 1);
-                            b.userData.owner.score++;
-                            totalKills++;
-                            const scoreEl = document.getElementById(`p${b.userData.owner.id}-score`);
-                            if (scoreEl) scoreEl.innerText = b.userData.owner.score;
-                            spawnEnemy();
+                            if (b.userData.owner) {
+                                b.userData.owner.score++;
+                                totalKills++;
+                                const scoreEl = document.getElementById(`p${b.userData.owner.id}-score`);
+                                if (scoreEl) scoreEl.innerText = b.userData.owner.score;
+                            }
                         }
                         break;
                     }
@@ -780,7 +930,7 @@
                 b.position.add(b.userData.velocity);
 
                 players.forEach(p => {
-                    if (p.health > 0 && b.position.distanceTo(p.mesh.position) < 2.0) {
+                    if (p && p.health > 0 && b.position.distanceTo(p.mesh.position) < 2.0) {
                         p.health -= 10;
                         updateHealthUI(p);
                         createExplosion(b.position);
@@ -826,7 +976,7 @@
         }
 
         function checkGameOver() {
-            const allDead = players.every(p => p.health <= 0);
+            const allDead = players.filter(p => p).every(p => p.health <= 0);
             if (allDead && !isGameOver) {
                 isGameOver = true;
                 const scoreEl = document.getElementById('final-score');
@@ -840,8 +990,10 @@
             if (!renderer) return;
             const vpWidth = getViewportWidth();
             players.forEach(p => {
-                p.camera.aspect = vpWidth / window.innerHeight;
-                p.camera.updateProjectionMatrix();
+                if (p && p.camera) {
+                    p.camera.aspect = vpWidth / window.innerHeight;
+                    p.camera.updateProjectionMatrix();
+                }
             });
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
@@ -850,7 +1002,7 @@
             const width = window.innerWidth;
             const height = window.innerHeight;
 
-            if (isMultiplayer && players.length > 1) {
+            if (gameMode === '2P_LOCAL' && players[0] && players[1]) {
                 renderer.setViewport(0, 0, width / 2, height);
                 renderer.setScissor(0, 0, width / 2, height);
                 renderer.setScissorTest(true);
@@ -860,10 +1012,10 @@
                 renderer.setScissor(width / 2, 0, width / 2, height);
                 renderer.setScissorTest(true);
                 renderer.render(scene, players[1].camera);
-            } else if (players.length > 0) {
+            } else if (players[myPlayerIndex] && players[myPlayerIndex].camera) {
                 renderer.setViewport(0, 0, width, height);
                 renderer.setScissorTest(false);
-                renderer.render(scene, players[0].camera);
+                renderer.render(scene, players[myPlayerIndex].camera);
             }
         }
 
@@ -872,6 +1024,7 @@
 
             if (!isGameOver) {
                 updatePlayers();
+                checkTerritoriesAndSpawn();
                 updateEnemies();
                 updateBombs();
                 updateProjectiles();
