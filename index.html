@@ -1,1 +1,772 @@
-10100100000101110000000101001001010101010101010101010110110100001000101010101010001010101010101010100101001010101-101010100011
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Retro Pixel Dogfight - Air to Ground Warfare</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; touch-action: manipulation; }
+        body { overflow: hidden; background-color: #000; font-family: 'Press Start 2P', monospace; user-select: none; }
+        
+        #game-wrapper { width: 100vw; height: 100vh; display: flex; position: absolute; top: 0; left: 0; z-index: 1; pointer-events: none; }
+        .viewport { position: relative; flex: 1; height: 100%; overflow: hidden; border-right: 2px solid #222; }
+        
+        canvas { position: absolute; top: 0; left: 0; width: 100vw !important; height: 100vh !important; z-index: 0; display: block; }
+
+        /* Menu / Hangar / Shop UI */
+        #builder-screen {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(10, 15, 25, 0.96); z-index: 100; display: flex;
+            flex-direction: column; align-items: center; justify-content: center; color: #fff;
+            padding: 20px; overflow-y: auto;
+        }
+        #builder-screen h1 { color: #00ff66; margin-bottom: 10px; font-size: 16px; text-align: center; }
+        .cash-display { color: #facc15; font-size: 12px; margin-bottom: 15px; }
+
+        .builder-box {
+            background: #111; border: 3px solid #00ff66; padding: 15px; width: 100%; max-width: 480px;
+            display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px;
+        }
+        .option-row { display: flex; justify-content: space-between; align-items: center; font-size: 9px; }
+        .option-row label { color: #aaa; }
+        .option-row input, .option-row select {
+            background: #222; border: 1px solid #00ff66; color: #fff; padding: 5px; font-family: 'Press Start 2P', monospace; font-size: 9px;
+        }
+
+        /* Plane Shop Cards */
+        .shop-title { color: #38bdf8; font-size: 10px; margin-top: 5px; text-align: center; }
+        .plane-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; max-width: 480px; margin-bottom: 15px; }
+        .plane-card {
+            background: #18181b; border: 2px solid #3f3f46; padding: 10px; font-size: 7px; text-align: center;
+            display: flex; flex-direction: column; gap: 5px; cursor: pointer; border-radius: 4px;
+        }
+        .plane-card.selected { border-color: #00ff66; background: #064e3b; }
+        .plane-card.locked { opacity: 0.6; }
+        .buy-btn {
+            font-family: 'Press Start 2P', monospace; font-size: 7px; padding: 4px; background: #eab308;
+            border: none; color: #000; cursor: pointer; border-radius: 2px; margin-top: 3px;
+        }
+
+        .start-btn {
+            font-family: 'Press Start 2P', monospace; padding: 12px 25px; font-size: 11px;
+            color: #000; background-color: #00ff66; border: none; cursor: pointer; transition: 0.2s;
+        }
+        .start-btn:hover { background-color: #33ff88; transform: scale(1.03); }
+
+        #room-info { font-size: 9px; color: #ffcc00; margin-top: 5px; text-align: center; }
+
+        .hud-ui { position: absolute; top: 15px; left: 15px; color: #fff; font-size: 9px; z-index: 10; }
+        .health-bar-bg { width: 140px; height: 10px; border: 2px solid #fff; margin-top: 4px; background: #222; }
+        .health-bar { width: 100%; height: 100%; background-color: #00ff66; }
+
+        /* Minimap Radar */
+        #minimap-container {
+            position: absolute; top: 15px; right: 15px; width: 130px; height: 130px;
+            border: 2px solid #00ff66; background: rgba(0, 15, 0, 0.85); z-index: 10;
+            border-radius: 50%; overflow: hidden; box-shadow: 0 0 8px rgba(0, 255, 102, 0.3);
+        }
+        #minimap { width: 100%; height: 100%; }
+
+        .hud-panel {
+            position: absolute; bottom: 80px; left: 15px; background: rgba(0, 0, 0, 0.85);
+            border: 2px solid #00ff66; padding: 6px; color: #00ff66; font-size: 7px; z-index: 10;
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;
+        }
+        .gauge-box { border: 1px solid #333; padding: 3px; background: #111; }
+        .gauge-title { color: #888; font-size: 6px; margin-bottom: 2px; }
+        .gauge-value { font-size: 8px; color: #fff; }
+
+        #territory-warning {
+            position: absolute; top: 40px; width: 100%; text-align: center;
+            color: #ff3333; font-size: 10px; font-weight: bold; text-shadow: 2px 2px #000;
+            display: none; z-index: 30; animation: blink 0.8s infinite;
+        }
+        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.2; } 100% { opacity: 1; } }
+
+        #nuke-flash {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: white; opacity: 0; pointer-events: none; z-index: 50; transition: opacity 0.05s ease-out;
+        }
+
+        #controls-hint {
+            position: absolute; bottom: 5px; left: 10px; right: 10px; color: #aaa; font-size: 5px;
+            text-align: center; line-height: 1.6; z-index: 10; background: rgba(0,0,0,0.85); padding: 4px 8px; border: 1px solid #444;
+        }
+
+        /* Mobile Controls Overlay */
+        #mobile-controls {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: 40; pointer-events: none; display: none;
+        }
+        .touch-btn {
+            position: absolute; background: rgba(255, 255, 255, 0.2); border: 2px solid rgba(255, 255, 255, 0.5);
+            color: #fff; font-family: 'Press Start 2P', monospace; font-size: 10px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center; pointer-events: auto; user-select: none;
+        }
+        .touch-btn:active { background: rgba(0, 255, 102, 0.5); }
+        
+        #btn-throttle-up { bottom: 90px; left: 20px; width: 50px; height: 50px; }
+        #btn-throttle-down { bottom: 30px; left: 20px; width: 50px; height: 50px; }
+        #btn-fire { bottom: 30px; right: 20px; width: 65px; height: 65px; background: rgba(239, 68, 68, 0.4); }
+        #btn-bomb { bottom: 105px; right: 20px; width: 55px; height: 55px; background: rgba(234, 179, 8, 0.4); }
+        
+        /* Virtual D-Pad / Joystick for Mobile Pitch & Roll */
+        #dpad-container {
+            position: absolute; bottom: 30px; left: 90px; width: 110px; height: 110px; pointer-events: auto;
+        }
+        .dpad-btn {
+            position: absolute; background: rgba(255,255,255,0.25); border: 1px solid #fff;
+            color: #fff; font-size: 8px; display: flex; align-items: center; justify-content: center;
+        }
+        #dpad-up { top: 0; left: 38px; width: 34px; height: 34px; }
+        #dpad-down { bottom: 0; left: 38px; width: 34px; height: 34px; }
+        #dpad-left { top: 38px; left: 0; width: 34px; height: 34px; }
+        #dpad-right { top: 38px; right: 0; width: 34px; height: 34px; }
+
+        #game-over {
+            display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            text-align: center; color: white; background: rgba(10, 10, 10, 0.95); padding: 30px;
+            border: 4px solid #fff; z-index: 60;
+        }
+        #game-over h1 { font-size: 16px; color: #ff3333; margin-bottom: 12px; }
+        #restart-btn {
+            font-family: 'Press Start 2P', monospace; padding: 10px 18px; font-size: 9px;
+            color: #000; background-color: #00ff66; border: none; cursor: pointer; margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="territory-warning">⚠️ WARNING: ENTERING ENEMY COUNTRY ⚠️</div>
+
+    <!-- MAIN MENU / HANGAR SHOP -->
+    <div id="builder-screen">
+        <h1>AIR & GROUND WARFARE</h1>
+        <div class="cash-display">BALANCE: $<span id="menu-credits">0</span></div>
+
+        <div class="shop-title">-- HANGAR AIRCRAFT SHOP --</div>
+        <div class="plane-grid">
+            <div class="plane-card selected" id="card-interceptor" onclick="selectPlaneType('interceptor')">
+                <strong>INTERCEPTOR</strong>
+                <span>SPEED: ★★★</span>
+                <span>ARMOR: ★★☆</span>
+                <span style="color:#00ff66">OWNED</span>
+            </div>
+            <div class="plane-card locked" id="card-gunship" onclick="selectPlaneType('gunship')">
+                <strong>HEAVY GUNSHIP</strong>
+                <span>SPEED: ★★☆</span>
+                <span>ARMOR: ★★★</span>
+                <button class="buy-btn" id="buy-gunship" onclick="buyPlane('gunship', 250, event)">BUY $250</button>
+            </div>
+            <div class="plane-card locked" id="card-stealth" onclick="selectPlaneType('stealth')">
+                <strong>STEALTH JET</strong>
+                <span>SPEED: ★★★★</span>
+                <span>ARMOR: ★☆☆</span>
+                <button class="buy-btn" id="buy-stealth" onclick="buyPlane('stealth', 500, event)">BUY $500</button>
+            </div>
+            <div class="plane-card locked" id="card-biplane" onclick="selectPlaneType('biplane')">
+                <strong>BIPLANE</strong>
+                <span>SPEED: ★☆☆</span>
+                <span>ARMOR: ★★★★</span>
+                <button class="buy-btn" id="buy-biplane" onclick="buyPlane('biplane', 150, event)">BUY $150</button>
+            </div>
+        </div>
+
+        <div class="builder-box">
+            <div class="option-row">
+                <label>GAME MODE:</label>
+                <select id="mode-select" onchange="toggleMultiplayerUI()">
+                    <option value="1P">1 PLAYER (SOLO)</option>
+                    <option value="2P_LOCAL">2 PLAYER (SPLIT-SCREEN)</option>
+                    <option value="ONLINE_HOST">ONLINE (HOST ROOM)</option>
+                    <option value="ONLINE_JOIN">ONLINE (JOIN ROOM)</option>
+                </select>
+            </div>
+
+            <div class="option-row" id="room-code-row" style="display: none;">
+                <label>ROOM CODE:</label>
+                <input type="text" id="room-code-input" placeholder="ENTER CODE" maxlength="6">
+            </div>
+
+            <div class="option-row">
+                <label>FUSELAGE COLOR:</label>
+                <input type="color" id="body-color" value="#2e7d32">
+            </div>
+            <div class="option-row">
+                <label>WING COLOR:</label>
+                <input type="color" id="wing-color" value="#1565c0">
+            </div>
+        </div>
+
+        <div id="room-info"></div>
+        <button class="start-btn" onclick="startGame()">DEPLOY TO BATTLEFIELD</button>
+    </div>
+
+    <div id="nuke-flash"></div>
+
+    <!-- Minimap Radar -->
+    <div id="minimap-container">
+        <canvas id="minimap" width="130" height="130"></canvas>
+    </div>
+
+    <!-- HUD Overlay -->
+    <div id="game-wrapper">
+        <div id="view-p1" class="viewport">
+            <div class="hud-ui">
+                <div>P1 SCORE: <span id="p1-score">0</span> | CASH: $<span id="p1-cash">0</span></div>
+                <div class="health-bar-bg"><div id="p1-health" class="health-bar"></div></div>
+            </div>
+            <div class="hud-panel">
+                <div class="gauge-box"><div class="gauge-title">SPEED</div><div id="p1-hud-speed" class="gauge-value">0 SPD</div></div>
+                <div class="gauge-box"><div class="gauge-title">ALTITUDE</div><div id="p1-hud-alt" class="gauge-value">0 FT</div></div>
+                <div class="gauge-box"><div class="gauge-title">GEAR</div><div id="p1-hud-gear" class="gauge-value">DOWN</div></div>
+            </div>
+        </div>
+
+        <div id="view-p2" class="viewport" style="display: none;">
+            <div class="hud-ui">
+                <div>P2 SCORE: <span id="p2-score">0</span></div>
+                <div class="health-bar-bg"><div id="p2-health" class="health-bar"></div></div>
+            </div>
+            <div class="hud-panel">
+                <div class="gauge-box"><div class="gauge-title">SPEED</div><div id="p2-hud-speed" class="gauge-value">0 SPD</div></div>
+                <div class="gauge-box"><div class="gauge-title">ALTITUDE</div><div id="p2-hud-alt" class="gauge-value">0 FT</div></div>
+                <div class="gauge-box"><div class="gauge-title">GEAR</div><div id="p2-hud-gear" class="gauge-value">DOWN</div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mobile Touch Controls -->
+    <div id="mobile-controls">
+        <div class="touch-btn" id="btn-throttle-up">THR+</div>
+        <div class="touch-btn" id="btn-throttle-down">THR-</div>
+        <div class="touch-btn" id="btn-fire">FIRE</div>
+        <div class="touch-btn" id="btn-bomb">BOMB</div>
+
+        <div id="dpad-container">
+            <div class="dpad-btn" id="dpad-up">▲</div>
+            <div class="dpad-btn" id="dpad-down">▼</div>
+            <div class="dpad-btn" id="dpad-left">◄</div>
+            <div class="dpad-btn" id="dpad-right">►</div>
+        </div>
+    </div>
+
+    <div id="controls-hint">
+        KEYBOARD CONTROLS: W/S (Throttle) | A/D (Roll) | Q/E (Yaw) | ARROWS (Pitch) | SPACE (Cannon) | B (Bomb) | G (Gear)
+    </div>
+
+    <div id="game-over">
+        <h1 id="over-title">MISSION OVER</h1>
+        <p>TOTAL DESTROYED: <span id="final-score">0</span></p>
+        <button id="restart-btn" onclick="location.reload()">RETURN TO HANGAR</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script>
+        let scene, renderer;
+        let players = [];
+        let allies = [];
+        let enemies = [];
+        let tanks = [];
+        let playerBullets = [];
+        let allyBullets = [];
+        let enemyBullets = [];
+        let tankShells = [];
+        let bombs = [];
+        let particles = [];
+
+        let airportsList = [];
+        let enemyBasesList = [];
+
+        let playerCredits = parseInt(localStorage.getItem('flightgame_credits') || '100');
+        let unlockedPlanes = JSON.parse(localStorage.getItem('flightgame_unlocked') || '["interceptor"]');
+        let selectedPlaneType = 'interceptor';
+
+        let totalKills = 0;
+        let isGameOver = false;
+        let gameMode = '1P';
+
+        let minimapCanvas, minimapCtx;
+
+        let peer = null;
+        let conn = null;
+        let myPlayerIndex = 0;
+
+        const GROUND_LEVEL = -21.2;
+        const SPAWN_ALTITUDE = GROUND_LEVEL + 1.2;
+        const STALL_SPEED = 0.22;
+        const GRAVITY = 0.008;
+
+        const keys = {};
+
+        function saveUserData() {
+            localStorage.setItem('flightgame_credits', playerCredits);
+            localStorage.setItem('flightgame_unlocked', JSON.stringify(unlockedPlanes));
+        }
+
+        function updateMenuUI() {
+            document.getElementById('menu-credits').innerText = playerCredits;
+            
+            ['gunship', 'stealth', 'biplane'].forEach(type => {
+                const card = document.getElementById(`card-${type}`);
+                const btn = document.getElementById(`buy-${type}`);
+                if (unlockedPlanes.includes(type)) {
+                    card.classList.remove('locked');
+                    if (btn) btn.style.display = 'none';
+                }
+            });
+        }
+
+        function selectPlaneType(type) {
+            if (!unlockedPlanes.includes(type)) return;
+            selectedPlaneType = type;
+            document.querySelectorAll('.plane-card').forEach(c => c.classList.remove('selected'));
+            document.getElementById(`card-${type}`).classList.add('selected');
+        }
+
+        function buyPlane(type, cost, event) {
+            event.stopPropagation();
+            if (playerCredits >= cost && !unlockedPlanes.includes(type)) {
+                playerCredits -= cost;
+                unlockedPlanes.push(type);
+                saveUserData();
+                updateMenuUI();
+                selectPlaneType(type);
+            } else if (playerCredits < cost) {
+                alert("Not enough credits! Destroy enemy tanks and planes to earn cash.");
+            }
+        }
+
+        function toggleMultiplayerUI() {
+            const mode = document.getElementById('mode-select').value;
+            document.getElementById('room-code-row').style.display = (mode === 'ONLINE_JOIN') ? 'flex' : 'none';
+        }
+
+        function setupMobileTouchControls() {
+            const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+            if (isTouchDevice) {
+                document.getElementById('mobile-controls').style.display = 'block';
+            }
+
+            const bindTouch = (id, keyCode) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.addEventListener('touchstart', (e) => { e.preventDefault(); keys[keyCode] = true; });
+                el.addEventListener('touchend', (e) => { e.preventDefault(); keys[keyCode] = false; });
+            };
+
+            bindTouch('btn-throttle-up', 'KeyW');
+            bindTouch('btn-throttle-down', 'KeyS');
+            bindTouch('btn-fire', 'Space');
+            bindTouch('btn-bomb', 'KeyB');
+            bindTouch('dpad-up', 'ArrowDown');
+            bindTouch('dpad-down', 'ArrowUp');
+            bindTouch('dpad-left', 'KeyA');
+            bindTouch('dpad-right', 'KeyD');
+        }
+
+        function startGame() {
+            gameMode = document.getElementById('mode-select').value;
+
+            if (gameMode === 'ONLINE_HOST') {
+                initHostOnline();
+            } else if (gameMode === 'ONLINE_JOIN') {
+                initJoinerOnline();
+            } else {
+                launchGame();
+            }
+        }
+
+        function initHostOnline() {
+            const hostId = "fg-" + Math.floor(1000 + Math.random() * 9000);
+            peer = new Peer(hostId);
+
+            peer.on('open', id => {
+                document.getElementById('room-info').innerText = `ROOM CODE: ${id.replace("fg-", "")}`;
+            });
+
+            peer.on('connection', connection => {
+                conn = connection;
+                setTimeout(launchGame, 800);
+            });
+        }
+
+        function initJoinerOnline() {
+            const code = document.getElementById('room-code-input').value.trim();
+            if (!code) return alert("Enter Room Code!");
+
+            myPlayerIndex = 1;
+            peer = new Peer();
+            peer.on('open', () => {
+                conn = peer.connect("fg-" + code);
+                conn.on('open', () => setTimeout(launchGame, 800));
+            });
+        }
+
+        function launchGame() {
+            document.getElementById('builder-screen').style.display = 'none';
+            if (gameMode === '2P_LOCAL') document.getElementById('view-p2').style.display = 'block';
+
+            setupMobileTouchControls();
+            initGame();
+            animate();
+            onWindowResize();
+        }
+
+        function setupCamera(plane) {
+            const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 4000);
+            camera.position.set(0, 3.5, 12);
+            plane.add(camera);
+            return camera;
+        }
+
+        function initGame() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x38bdf8);
+            scene.fog = new THREE.FogExp2(0x38bdf8, 0.00035);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            minimapCanvas = document.getElementById('minimap');
+            minimapCtx = minimapCanvas.getContext('2d');
+
+            scene.add(new THREE.AmbientLight(0xffffff, 0.85));
+            const sun = new THREE.DirectionalLight(0xffffff, 0.9);
+            sun.position.set(100, 400, 100);
+            scene.add(sun);
+
+            createWorldTerrainAndRiver();
+            generateAirports();
+            generateEnemyCountry();
+            spawnTanks();
+            spawnAllyNPCs();
+
+            const bodyColor = parseInt(document.getElementById('body-color').value.replace('#', '0x'));
+            const wingColor = parseInt(document.getElementById('wing-color').value.replace('#', '0x'));
+
+            const p1Obj = createPlaneModel(bodyColor, wingColor, selectedPlaneType);
+            p1Obj.position.set(0, SPAWN_ALTITUDE, 0);
+            scene.add(p1Obj);
+
+            players[myPlayerIndex] = {
+                id: myPlayerIndex + 1, mesh: p1Obj, camera: setupCamera(p1Obj), health: 100, score: 0,
+                throttle: 0.0, forwardSpeed: 0.0, verticalVelocity: 0,
+                pitchRate: 0, rollRate: 0, yawRate: 0, lastShoot: 0, gearDown: true, lastGearToggle: 0
+            };
+
+            updateMenuUI();
+
+            window.addEventListener('keydown', e => keys[e.code] = true);
+            window.addEventListener('keyup', e => keys[e.code] = false);
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function createWorldTerrainAndRiver() {
+            const land = new THREE.Mesh(
+                new THREE.PlaneGeometry(25000, 25000),
+                new THREE.MeshLambertMaterial({ color: 0x3a7d44 })
+            );
+            land.rotation.x = -Math.PI / 2;
+            land.position.y = GROUND_LEVEL;
+            scene.add(land);
+
+            // Create Winding River Feature
+            const riverCurve = new THREE.CatmullRomCurve3([
+                new THREE.Vector3(-4000, GROUND_LEVEL + 0.1, -8000),
+                new THREE.Vector3(-1200, GROUND_LEVEL + 0.1, -4000),
+                new THREE.Vector3(800, GROUND_LEVEL + 0.1, 0),
+                new THREE.Vector3(-600, GROUND_LEVEL + 0.1, 4000),
+                new THREE.Vector3(2000, GROUND_LEVEL + 0.1, 8000)
+            ]);
+
+            const riverGeo = new THREE.TubeGeometry(riverCurve, 100, 60, 8, false);
+            const riverMat = new THREE.MeshLambertMaterial({ color: 0x0284c7 });
+            const riverMesh = new THREE.Mesh(riverGeo, riverMat);
+            scene.add(riverMesh);
+        }
+
+        function generateAirports() {
+            for (let i = 0; i < 40; i++) {
+                const posX = (Math.random() - 0.5) * 8000;
+                const posZ = (Math.random() - 0.5) * 8000;
+
+                const runway = new THREE.Mesh(
+                    new THREE.BoxGeometry(40, 0.2, 300),
+                    new THREE.MeshLambertMaterial({ color: 0x24272c })
+                );
+                runway.position.set(posX, GROUND_LEVEL + 0.1, posZ);
+                scene.add(runway);
+                airportsList.push({ pos: new THREE.Vector3(posX, GROUND_LEVEL, posZ) });
+            }
+        }
+
+        function generateEnemyCountry() {
+            const territory = new THREE.Mesh(
+                new THREE.PlaneGeometry(8000, 8000),
+                new THREE.MeshLambertMaterial({ color: 0x7f1d1d, transparent: true, opacity: 0.5 })
+            );
+            territory.rotation.x = -Math.PI / 2;
+            territory.position.set(0, GROUND_LEVEL + 0.15, -6000);
+            scene.add(territory);
+
+            for (let i = 0; i < 30; i++) {
+                const posX = (Math.sin(i) * 3000);
+                const posZ = -6000 + (Math.cos(i) * 3000);
+                enemyBasesList.push({ pos: new THREE.Vector3(posX, GROUND_LEVEL, posZ), radius: 600, activeEnemies: 0 });
+            }
+        }
+
+        function spawnTanks() {
+            const tankMat = new THREE.MeshLambertMaterial({ color: 0x3f3f46 });
+            const turretMat = new THREE.MeshLambertMaterial({ color: 0x18181b });
+
+            for (let i = 0; i < 25; i++) {
+                const tank = new THREE.Group();
+                const body = new THREE.Mesh(new THREE.BoxGeometry(4, 1.8, 6), tankMat);
+                const turret = new THREE.Mesh(new THREE.BoxGeometry(2.5, 1.2, 2.5), turretMat);
+                turret.position.y = 1.2;
+                const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 3.5), turretMat);
+                barrel.rotation.x = Math.PI / 2;
+                barrel.position.set(0, 1.2, 2.0);
+
+                tank.add(body, turret, barrel);
+
+                const posX = (Math.random() - 0.5) * 6000;
+                const posZ = -2000 - Math.random() * 4000;
+                tank.position.set(posX, GROUND_LEVEL + 0.9, posZ);
+
+                tank.userData = { health: 40, lastShot: 0, isEnemy: true };
+                scene.add(tank);
+                tanks.push(tank);
+            }
+        }
+
+        function spawnAllyNPCs() {
+            for (let i = 0; i < 3; i++) {
+                const ally = createPlaneModel(0x1e40af, 0x60a5fa, 'interceptor');
+                ally.position.set((i - 1) * 30, SPAWN_ALTITUDE + 40, -50);
+                ally.userData = { health: 60, speed: 0.4, lastShot: 0 };
+                scene.add(ally);
+                allies.push(ally);
+            }
+        }
+
+        function createPlaneModel(bodyColor, wingColor, style) {
+            const group = new THREE.Group();
+            const bodyMat = new THREE.MeshLambertMaterial({ color: bodyColor });
+            const wingMat = new THREE.MeshLambertMaterial({ color: wingColor });
+
+            const body = new THREE.Mesh(new THREE.BoxGeometry( style === 'gunship' ? 1.8 : 1.2, 1.2, 3.8), bodyMat);
+            group.add(body);
+
+            let wing;
+            if (style === 'biplane') {
+                const w1 = new THREE.Mesh(new THREE.BoxGeometry(5.5, 0.15, 1.2), wingMat);
+                w1.position.set(0, 0.6, 0);
+                const w2 = new THREE.Mesh(new THREE.BoxGeometry(5.5, 0.15, 1.2), wingMat);
+                w2.position.set(0, -0.4, 0);
+                group.add(w1, w2);
+            } else {
+                wing = new THREE.Mesh(new THREE.BoxGeometry(style === 'stealth' ? 7.5 : 6.0, 0.18, 1.4), wingMat);
+                wing.position.set(0, 0.1, 0.2);
+                group.add(wing);
+            }
+
+            const prop = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.2, 0.08), new THREE.MeshBasicMaterial({ color: 0x111111 }));
+            prop.position.set(0, 0, 1.9);
+            group.add(prop);
+            group.userData.propeller = prop;
+
+            return group;
+        }
+
+        function updatePlayers() {
+            players.forEach((p, idx) => {
+                if (!p || p.health <= 0) return;
+
+                if (keys.KeyW) p.throttle = Math.min(1.0, p.throttle + 0.01);
+                if (keys.KeyS) p.throttle = Math.max(0.0, p.throttle - 0.01);
+
+                p.forwardSpeed += (p.throttle * 0.85 - p.forwardSpeed) * 0.03;
+
+                if (p.mesh.userData.propeller) p.mesh.userData.propeller.rotation.z += p.forwardSpeed * 2.5;
+
+                if (keys.ArrowDown) p.pitchRate = Math.min(0.025, p.pitchRate + 0.002);
+                else if (keys.ArrowUp) p.pitchRate = Math.max(-0.025, p.pitchRate - 0.002);
+                else p.pitchRate *= 0.85;
+
+                if (keys.KeyA) p.rollRate = Math.min(0.03, p.rollRate + 0.003);
+                else if (keys.KeyD) p.rollRate = Math.max(-0.03, p.rollRate - 0.003);
+                else p.rollRate *= 0.8;
+
+                p.mesh.rotation.x += p.pitchRate;
+                p.mesh.rotation.z += p.rollRate;
+
+                const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(p.mesh.quaternion);
+                p.mesh.position.add(fwd.multiplyScalar(p.forwardSpeed));
+
+                if (p.mesh.position.y <= SPAWN_ALTITUDE) p.mesh.position.y = SPAWN_ALTITUDE;
+
+                const now = Date.now();
+                if (keys.Space && now - p.lastShoot > 120) {
+                    shootBullet(p);
+                    p.lastShoot = now;
+                }
+                if (keys.KeyB && !p.hasBomb) {
+                    dropBomb(p);
+                    p.hasBomb = true;
+                    setTimeout(() => p.hasBomb = false, 2000);
+                }
+
+                document.getElementById('p1-hud-speed').innerText = Math.round(p.forwardSpeed * 200) + ' SPD';
+                document.getElementById('p1-hud-alt').innerText = Math.max(0, Math.round((p.mesh.position.y - SPAWN_ALTITUDE) * 10)) + ' FT';
+            });
+        }
+
+        function shootBullet(player) {
+            const bullet = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 1.0), new THREE.MeshBasicMaterial({ color: 0xffff00 }));
+            bullet.position.copy(player.mesh.position);
+            bullet.userData = { velocity: new THREE.Vector3(0, 0, -1).applyQuaternion(player.mesh.quaternion).multiplyScalar(2.2), owner: player };
+            scene.add(bullet);
+            playerBullets.push(bullet);
+        }
+
+        function dropBomb(player) {
+            const bomb = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, 1.5), new THREE.MeshLambertMaterial({ color: 0x111111 }));
+            bomb.position.copy(player.mesh.position);
+            bomb.userData = { velocity: new THREE.Vector3(0, -0.2, -player.forwardSpeed), owner: player };
+            scene.add(bomb);
+            bombs.push(bomb);
+        }
+
+        function updateTanksAndCombat() {
+            const now = Date.now();
+            const player = players[myPlayerIndex];
+
+            tanks.forEach(tank => {
+                if (!player || player.health <= 0) return;
+                const dist = tank.position.distanceTo(player.mesh.position);
+
+                if (dist < 400 && now - tank.userData.lastShot > 2000) {
+                    const shell = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.8), new THREE.MeshBasicMaterial({ color: 0xff4400 }));
+                    shell.position.copy(tank.position);
+                    const dir = new THREE.Vector3().subVectors(player.mesh.position, tank.position).normalize();
+                    shell.userData = { velocity: dir.multiplyScalar(1.5) };
+                    scene.add(shell);
+                    tankShells.push(shell);
+                    tank.userData.lastShot = now;
+                }
+            });
+
+            // Tank Shell Collision
+            for (let i = tankShells.length - 1; i >= 0; i--) {
+                const s = tankShells[i];
+                s.position.add(s.userData.velocity);
+                if (player && s.position.distanceTo(player.mesh.position) < 3.0) {
+                    player.health -= 8;
+                    document.getElementById('p1-health').style.width = Math.max(0, player.health) + '%';
+                    scene.remove(s);
+                    tankShells.splice(i, 1);
+                }
+            }
+
+            // Bomb vs Tanks / Ground
+            for (let i = bombs.length - 1; i >= 0; i--) {
+                const b = bombs[i];
+                b.userData.velocity.y -= 0.015;
+                b.position.add(b.userData.velocity);
+
+                if (b.position.y <= GROUND_LEVEL) {
+                    tanks.forEach((tank, tIdx) => {
+                        if (tank.position.distanceTo(b.position) < 80) {
+                            scene.remove(tank);
+                            tanks.splice(tIdx, 1);
+                            playerCredits += 50;
+                            player.score++;
+                            saveUserData();
+                            document.getElementById('p1-score').innerText = player.score;
+                            document.getElementById('p1-cash').innerText = playerCredits;
+                        }
+                    });
+                    scene.remove(b);
+                    bombs.splice(i, 1);
+                }
+            }
+        }
+
+        function updateProjectiles() {
+            for (let i = playerBullets.length - 1; i >= 0; i--) {
+                const b = playerBullets[i];
+                b.position.add(b.userData.velocity);
+
+                tanks.forEach((tank, tIdx) => {
+                    if (b.position.distanceTo(tank.position) < 4.0) {
+                        tank.userData.health -= 20;
+                        scene.remove(b);
+                        playerBullets.splice(i, 1);
+                        if (tank.userData.health <= 0) {
+                            scene.remove(tank);
+                            tanks.splice(tIdx, 1);
+                            playerCredits += 50;
+                            saveUserData();
+                            b.userData.owner.score++;
+                            document.getElementById('p1-score').innerText = b.userData.owner.score;
+                            document.getElementById('p1-cash').innerText = playerCredits;
+                        }
+                    }
+                });
+            }
+        }
+
+        function drawMinimap() {
+            if (!minimapCtx || !players[myPlayerIndex]) return;
+            const px = players[myPlayerIndex].mesh.position.x;
+            const pz = players[myPlayerIndex].mesh.position.z;
+            const radarRadius = 2500;
+            const mapSize = 130;
+            const center = mapSize / 2;
+
+            minimapCtx.clearRect(0, 0, mapSize, mapSize);
+
+            // Tanks (Orange Square Blips)
+            minimapCtx.fillStyle = '#f97316';
+            tanks.forEach(t => {
+                const rx = center + ((t.position.x - px) / radarRadius) * center;
+                const ry = center + ((t.position.z - pz) / radarRadius) * center;
+                minimapCtx.fillRect(rx - 2, ry - 2, 4, 4);
+            });
+
+            // Player (Green Center)
+            minimapCtx.fillStyle = '#00ff66';
+            minimapCtx.beginPath();
+            minimapCtx.arc(center, center, 4, 0, Math.PI * 2);
+            minimapCtx.fill();
+        }
+
+        function onWindowResize() {
+            if (!renderer) return;
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if (!isGameOver) {
+                updatePlayers();
+                updateTanksAndCombat();
+                updateProjectiles();
+                drawMinimap();
+            }
+            if (renderer && players[myPlayerIndex]) {
+                renderer.render(scene, players[myPlayerIndex].camera);
+            }
+        }
+
+        updateMenuUI();
+    </script>
+</body>
+</html>
