@@ -402,10 +402,12 @@
         }
 
         function generate370Airports() {
-            const runwayMat = new THREE.MeshLambertMaterial({ color: 0x1f2937 });
-            const stripeMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
-            const hangarMat = new THREE.MeshLambertMaterial({ color: 0x6b7280 });
-            const apronMat = new THREE.MeshLambertMaterial({ color: 0x4b5563 });
+            const asphaltMat = new THREE.MeshLambertMaterial({ color: 0x24272c });
+            const whiteLineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            const yellowLineMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
+            const hangarMat = new THREE.MeshLambertMaterial({ color: 0x555d6b });
+            const roofMat = new THREE.MeshLambertMaterial({ color: 0x374151 });
+            const apronMat = new THREE.MeshLambertMaterial({ color: 0x374151 });
 
             let count = 0;
             const step = 800;
@@ -422,24 +424,71 @@
                     airport.position.set(posX, GROUND_LEVEL + 0.1, posZ);
                     airport.rotation.y = rotation;
 
-                    const apron = new THREE.Mesh(new THREE.BoxGeometry(100, 0.1, 200), apronMat);
+                    // Concrete Apron Base
+                    const apron = new THREE.Mesh(new THREE.BoxGeometry(160, 0.1, 320), apronMat);
                     apron.position.set(0, -0.05, 0);
                     airport.add(apron);
 
-                    const runway = new THREE.Mesh(new THREE.BoxGeometry(24, 0.2, 180), runwayMat);
+                    // Main Asphalt Runway Strip
+                    const runwayWidth = 36;
+                    const runwayLength = 260;
+                    const runway = new THREE.Mesh(new THREE.BoxGeometry(runwayWidth, 0.2, runwayLength), asphaltMat);
                     airport.add(runway);
 
-                    for (let s = -80; s <= 80; s += 16) {
-                        const stripe = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.25, 7), stripeMat);
+                    // Runway Edge Markings (Solid White Lines)
+                    const leftEdge = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.25, runwayLength - 20), whiteLineMat);
+                    leftEdge.position.set(-(runwayWidth / 2 - 1.5), 0.05, 0);
+                    const rightEdge = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.25, runwayLength - 20), whiteLineMat);
+                    rightEdge.position.set((runwayWidth / 2 - 1.5), 0.05, 0);
+                    airport.add(leftEdge, rightEdge);
+
+                    // Center Dashed White Lines
+                    for (let s = -runwayLength / 2 + 25; s <= runwayLength / 2 - 25; s += 20) {
+                        const stripe = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.25, 10), whiteLineMat);
                         stripe.position.set(0, 0.05, s);
                         airport.add(stripe);
                     }
 
-                    const hangar1 = new THREE.Mesh(new THREE.BoxGeometry(20, 10, 20), hangarMat);
-                    hangar1.position.set(24, 5, -40);
-                    const hangar2 = new THREE.Mesh(new THREE.BoxGeometry(20, 10, 20), hangarMat);
-                    hangar2.position.set(-24, 5, -40);
+                    // Threshold Piano Keys (Both Ends)
+                    [-runwayLength / 2 + 10, runwayLength / 2 - 10].forEach(zPos => {
+                        for (let k = -12; k <= 12; k += 4) {
+                            if (Math.abs(k) < 2) continue; // gap in middle
+                            const key = new THREE.Mesh(new THREE.BoxGeometry(2, 0.26, 12), whiteLineMat);
+                            key.position.set(k, 0.05, zPos);
+                            airport.add(key);
+                        }
+                    });
+
+                    // Taxiways
+                    const taxiway = new THREE.Mesh(new THREE.BoxGeometry(18, 0.18, 80), asphaltMat);
+                    taxiway.position.set(35, 0.02, -30);
+                    taxiway.rotation.y = Math.PI / 4;
+                    airport.add(taxiway);
+
+                    // Taxiway Yellow Centerline
+                    const taxiLine = new THREE.Mesh(new THREE.BoxGeometry(1, 0.22, 75), yellowLineMat);
+                    taxiLine.position.set(35, 0.05, -30);
+                    taxiLine.rotation.y = Math.PI / 4;
+                    airport.add(taxiLine);
+
+                    // Hangars
+                    const hangar1 = new THREE.Group();
+                    const body1 = new THREE.Mesh(new THREE.BoxGeometry(28, 12, 35), hangarMat);
+                    const roof1 = new THREE.Mesh(new THREE.BoxGeometry(30, 2, 37), roofMat);
+                    roof1.position.y = 6.5;
+                    hangar1.add(body1, roof1);
+                    hangar1.position.set(55, 6, -60);
+
+                    const hangar2 = hangar1.clone();
+                    hangar2.position.set(-55, 6, -60);
                     airport.add(hangar1, hangar2);
+
+                    // Control Tower
+                    const towerBase = new THREE.Mesh(new THREE.BoxGeometry(10, 28, 10), hangarMat);
+                    towerBase.position.set(60, 14, 20);
+                    const towerCab = new THREE.Mesh(new THREE.BoxGeometry(14, 8, 14), new THREE.MeshLambertMaterial({ color: 0x1d4ed8 }));
+                    towerCab.position.set(60, 30, 20);
+                    airport.add(towerBase, towerCab);
 
                     scene.add(airport);
                     airportsList.push({ id: count, pos: new THREE.Vector3(posX, GROUND_LEVEL, posZ) });
