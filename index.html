@@ -85,11 +85,6 @@
         }
         @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.2; } 100% { opacity: 1; } }
 
-        #nuke-flash {
-            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
-            background: white; opacity: 0; pointer-events: none; z-index: 50; transition: opacity 0.05s ease-out;
-        }
-
         #controls-hint {
             position: absolute; bottom: 5px; left: 10px; right: 10px; color: #aaa; font-size: 5px;
             text-align: center; line-height: 1.6; z-index: 10; background: rgba(0,0,0,0.85); padding: 4px 8px; border: 1px solid #444;
@@ -112,7 +107,6 @@
         #btn-fire { bottom: 30px; right: 20px; width: 65px; height: 65px; background: rgba(239, 68, 68, 0.4); }
         #btn-bomb { bottom: 105px; right: 20px; width: 55px; height: 55px; background: rgba(234, 179, 8, 0.4); }
         
-        /* Virtual D-Pad / Joystick for Mobile Pitch & Roll */
         #dpad-container {
             position: absolute; bottom: 30px; left: 90px; width: 110px; height: 110px; pointer-events: auto;
         }
@@ -204,8 +198,6 @@
         <button class="start-btn" onclick="startGame()">DEPLOY TO BATTLEFIELD</button>
     </div>
 
-    <div id="nuke-flash"></div>
-
     <!-- Minimap Radar -->
     <div id="minimap-container">
         <canvas id="minimap" width="130" height="130"></canvas>
@@ -254,7 +246,7 @@
     </div>
 
     <div id="controls-hint">
-        KEYBOARD CONTROLS: W/S (Throttle) | A/D (Roll) | Q/E (Yaw) | ARROWS (Pitch) | SPACE (Cannon) | B (Bomb) | G (Gear)
+        KEYBOARD CONTROLS: W/S (Throttle) | A/D (Roll) | Q/E (Rudder Yaw) | ARROWS (Pitch) | SPACE (Cannon) | B (Bomb) | G (Gear)
     </div>
 
     <div id="game-over">
@@ -269,14 +261,10 @@
         let scene, renderer;
         let players = [];
         let allies = [];
-        let enemies = [];
         let tanks = [];
         let playerBullets = [];
-        let allyBullets = [];
-        let enemyBullets = [];
         let tankShells = [];
         let bombs = [];
-        let particles = [];
 
         let airportsList = [];
         let enemyBasesList = [];
@@ -285,7 +273,6 @@
         let unlockedPlanes = JSON.parse(localStorage.getItem('flightgame_unlocked') || '["interceptor"]');
         let selectedPlaneType = 'interceptor';
 
-        let totalKills = 0;
         let isGameOver = false;
         let gameMode = '1P';
 
@@ -297,8 +284,6 @@
 
         const GROUND_LEVEL = -21.2;
         const SPAWN_ALTITUDE = GROUND_LEVEL + 1.2;
-        const STALL_SPEED = 0.22;
-        const GRAVITY = 0.008;
 
         const keys = {};
 
@@ -444,7 +429,6 @@
             generateAirports();
             generateEnemyCountry();
             spawnTanks();
-            spawnAllyNPCs();
 
             const bodyColor = parseInt(document.getElementById('body-color').value.replace('#', '0x'));
             const wingColor = parseInt(document.getElementById('wing-color').value.replace('#', '0x'));
@@ -455,8 +439,9 @@
 
             players[myPlayerIndex] = {
                 id: myPlayerIndex + 1, mesh: p1Obj, camera: setupCamera(p1Obj), health: 100, score: 0,
-                throttle: 0.0, forwardSpeed: 0.0, verticalVelocity: 0,
-                pitchRate: 0, rollRate: 0, yawRate: 0, lastShoot: 0, gearDown: true, lastGearToggle: 0
+                throttle: 0.0, forwardSpeed: 0.0,
+                pitchRate: 0, rollRate: 0, yawRate: 0,
+                lastShoot: 0, gearDown: true, lastGearToggle: 0
             };
 
             updateMenuUI();
@@ -475,7 +460,6 @@
             land.position.y = GROUND_LEVEL;
             scene.add(land);
 
-            // Create Winding River Feature
             const riverCurve = new THREE.CatmullRomCurve3([
                 new THREE.Vector3(-4000, GROUND_LEVEL + 0.1, -8000),
                 new THREE.Vector3(-1200, GROUND_LEVEL + 0.1, -4000),
@@ -517,7 +501,7 @@
             for (let i = 0; i < 30; i++) {
                 const posX = (Math.sin(i) * 3000);
                 const posZ = -6000 + (Math.cos(i) * 3000);
-                enemyBasesList.push({ pos: new THREE.Vector3(posX, GROUND_LEVEL, posZ), radius: 600, activeEnemies: 0 });
+                enemyBasesList.push({ pos: new THREE.Vector3(posX, GROUND_LEVEL, posZ), radius: 600 });
             }
         }
 
@@ -540,19 +524,9 @@
                 const posZ = -2000 - Math.random() * 4000;
                 tank.position.set(posX, GROUND_LEVEL + 0.9, posZ);
 
-                tank.userData = { health: 40, lastShot: 0, isEnemy: true };
+                tank.userData = { health: 40, lastShot: 0 };
                 scene.add(tank);
                 tanks.push(tank);
-            }
-        }
-
-        function spawnAllyNPCs() {
-            for (let i = 0; i < 3; i++) {
-                const ally = createPlaneModel(0x1e40af, 0x60a5fa, 'interceptor');
-                ally.position.set((i - 1) * 30, SPAWN_ALTITUDE + 40, -50);
-                ally.userData = { health: 60, speed: 0.4, lastShot: 0 };
-                scene.add(ally);
-                allies.push(ally);
             }
         }
 
@@ -561,10 +535,9 @@
             const bodyMat = new THREE.MeshLambertMaterial({ color: bodyColor });
             const wingMat = new THREE.MeshLambertMaterial({ color: wingColor });
 
-            const body = new THREE.Mesh(new THREE.BoxGeometry( style === 'gunship' ? 1.8 : 1.2, 1.2, 3.8), bodyMat);
+            const body = new THREE.Mesh(new THREE.BoxGeometry(style === 'gunship' ? 1.8 : 1.2, 1.2, 3.8), bodyMat);
             group.add(body);
 
-            let wing;
             if (style === 'biplane') {
                 const w1 = new THREE.Mesh(new THREE.BoxGeometry(5.5, 0.15, 1.2), wingMat);
                 w1.position.set(0, 0.6, 0);
@@ -572,7 +545,7 @@
                 w2.position.set(0, -0.4, 0);
                 group.add(w1, w2);
             } else {
-                wing = new THREE.Mesh(new THREE.BoxGeometry(style === 'stealth' ? 7.5 : 6.0, 0.18, 1.4), wingMat);
+                const wing = new THREE.Mesh(new THREE.BoxGeometry(style === 'stealth' ? 7.5 : 6.0, 0.18, 1.4), wingMat);
                 wing.position.set(0, 0.1, 0.2);
                 group.add(wing);
             }
@@ -586,33 +559,55 @@
         }
 
         function updatePlayers() {
-            players.forEach((p, idx) => {
+            players.forEach((p) => {
                 if (!p || p.health <= 0) return;
 
+                const now = Date.now();
+
+                // 1. Throttle (W / S)
                 if (keys.KeyW) p.throttle = Math.min(1.0, p.throttle + 0.01);
                 if (keys.KeyS) p.throttle = Math.max(0.0, p.throttle - 0.01);
-
                 p.forwardSpeed += (p.throttle * 0.85 - p.forwardSpeed) * 0.03;
 
-                if (p.mesh.userData.propeller) p.mesh.userData.propeller.rotation.z += p.forwardSpeed * 2.5;
+                if (p.mesh.userData.propeller) {
+                    p.mesh.userData.propeller.rotation.z += p.forwardSpeed * 2.5;
+                }
 
+                // 2. Pitch (Up Arrow / Down Arrow)
                 if (keys.ArrowDown) p.pitchRate = Math.min(0.025, p.pitchRate + 0.002);
                 else if (keys.ArrowUp) p.pitchRate = Math.max(-0.025, p.pitchRate - 0.002);
                 else p.pitchRate *= 0.85;
 
+                // 3. Roll (A / D)
                 if (keys.KeyA) p.rollRate = Math.min(0.03, p.rollRate + 0.003);
                 else if (keys.KeyD) p.rollRate = Math.max(-0.03, p.rollRate - 0.003);
                 else p.rollRate *= 0.8;
 
-                p.mesh.rotation.x += p.pitchRate;
-                p.mesh.rotation.z += p.rollRate;
+                // 4. Rudder / Yaw (Q / E) - FIXED!
+                if (keys.KeyQ) p.yawRate = Math.min(0.02, p.yawRate + 0.002);
+                else if (keys.KeyE) p.yawRate = Math.max(-0.02, p.yawRate - 0.002);
+                else p.yawRate *= 0.8;
 
+                // Apply Smooth Local Rotations
+                p.mesh.rotateX(p.pitchRate);
+                p.mesh.rotateY(p.yawRate);
+                p.mesh.rotateZ(-p.rollRate);
+
+                // Movement Forward
                 const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(p.mesh.quaternion);
                 p.mesh.position.add(fwd.multiplyScalar(p.forwardSpeed));
 
+                // Ground boundary collision
                 if (p.mesh.position.y <= SPAWN_ALTITUDE) p.mesh.position.y = SPAWN_ALTITUDE;
 
-                const now = Date.now();
+                // 5. Landing Gear Toggle (G) - FIXED!
+                if (keys.KeyG && now - p.lastGearToggle > 300) {
+                    p.gearDown = !p.gearDown;
+                    p.lastGearToggle = now;
+                    document.getElementById('p1-hud-gear').innerText = p.gearDown ? 'DOWN' : 'UP';
+                }
+
+                // Weapons
                 if (keys.Space && now - p.lastShoot > 120) {
                     shootBullet(p);
                     p.lastShoot = now;
@@ -623,6 +618,7 @@
                     setTimeout(() => p.hasBomb = false, 2000);
                 }
 
+                // HUD Stats
                 document.getElementById('p1-hud-speed').innerText = Math.round(p.forwardSpeed * 200) + ' SPD';
                 document.getElementById('p1-hud-alt').innerText = Math.max(0, Math.round((p.mesh.position.y - SPAWN_ALTITUDE) * 10)) + ' FT';
             });
@@ -663,7 +659,6 @@
                 }
             });
 
-            // Tank Shell Collision
             for (let i = tankShells.length - 1; i >= 0; i--) {
                 const s = tankShells[i];
                 s.position.add(s.userData.velocity);
@@ -675,7 +670,6 @@
                 }
             }
 
-            // Bomb vs Tanks / Ground
             for (let i = bombs.length - 1; i >= 0; i--) {
                 const b = bombs[i];
                 b.userData.velocity.y -= 0.015;
@@ -733,7 +727,6 @@
 
             minimapCtx.clearRect(0, 0, mapSize, mapSize);
 
-            // Tanks (Orange Square Blips)
             minimapCtx.fillStyle = '#f97316';
             tanks.forEach(t => {
                 const rx = center + ((t.position.x - px) / radarRadius) * center;
@@ -741,7 +734,6 @@
                 minimapCtx.fillRect(rx - 2, ry - 2, 4, 4);
             });
 
-            // Player (Green Center)
             minimapCtx.fillStyle = '#00ff66';
             minimapCtx.beginPath();
             minimapCtx.arc(center, center, 4, 0, Math.PI * 2);
