@@ -550,10 +550,32 @@
                 group.add(wing);
             }
 
+            // Propeller
             const prop = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.2, 0.08), new THREE.MeshBasicMaterial({ color: 0x111111 }));
             prop.position.set(0, 0, 1.9);
             group.add(prop);
             group.userData.propeller = prop;
+
+            // 3D Landing Gear Wheels
+            const gearGroup = new THREE.Group();
+            const wheelMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+            const wheelGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.2, 8);
+
+            const frontWheel = new THREE.Mesh(wheelGeo, wheelMat);
+            frontWheel.rotation.z = Math.PI / 2;
+            frontWheel.position.set(0, -0.7, 1.2);
+
+            const leftWheel = new THREE.Mesh(wheelGeo, wheelMat);
+            leftWheel.rotation.z = Math.PI / 2;
+            leftWheel.position.set(-0.8, -0.7, -0.5);
+
+            const rightWheel = new THREE.Mesh(wheelGeo, wheelMat);
+            rightWheel.rotation.z = Math.PI / 2;
+            rightWheel.position.set(0.8, -0.7, -0.5);
+
+            gearGroup.add(frontWheel, leftWheel, rightWheel);
+            group.add(gearGroup);
+            group.userData.landingGear = gearGroup;
 
             return group;
         }
@@ -583,7 +605,7 @@
                 else if (keys.KeyD) p.rollRate = Math.max(-0.03, p.rollRate - 0.003);
                 else p.rollRate *= 0.8;
 
-                // 4. Rudder / Yaw (Q / E) - FIXED!
+                // 4. Rudder / Yaw (Q / E)
                 if (keys.KeyQ) p.yawRate = Math.min(0.02, p.yawRate + 0.002);
                 else if (keys.KeyE) p.yawRate = Math.max(-0.02, p.yawRate - 0.002);
                 else p.yawRate *= 0.8;
@@ -600,11 +622,17 @@
                 // Ground boundary collision
                 if (p.mesh.position.y <= SPAWN_ALTITUDE) p.mesh.position.y = SPAWN_ALTITUDE;
 
-                // 5. Landing Gear Toggle (G) - FIXED!
+                // 5. Landing Gear Toggle & Animation (G)
                 if (keys.KeyG && now - p.lastGearToggle > 300) {
                     p.gearDown = !p.gearDown;
                     p.lastGearToggle = now;
                     document.getElementById('p1-hud-gear').innerText = p.gearDown ? 'DOWN' : 'UP';
+                }
+
+                // Smoothly lower/retract 3D landing gear mesh
+                if (p.mesh.userData.landingGear) {
+                    const targetY = p.gearDown ? 0 : 0.6;
+                    p.mesh.userData.landingGear.position.y += (targetY - p.mesh.userData.landingGear.position.y) * 0.1;
                 }
 
                 // Weapons
