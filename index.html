@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Retro Pixel Dogfight v2.0 (Gear Update) - Air to Ground Warfare</title>
+    <title>Retro Pixel Dogfight v2.3 (Drift Mechanics & Audio) - Air to Ground Warfare</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
@@ -104,6 +104,7 @@
         
         #btn-throttle-up { bottom: 90px; left: 20px; width: 50px; height: 50px; }
         #btn-throttle-down { bottom: 30px; left: 20px; width: 50px; height: 50px; }
+        #btn-brake { bottom: 150px; left: 20px; width: 50px; height: 50px; background: rgba(239, 68, 68, 0.4); }
         #btn-fire { bottom: 30px; right: 20px; width: 65px; height: 65px; background: rgba(239, 68, 68, 0.4); }
         #btn-bomb { bottom: 105px; right: 20px; width: 55px; height: 55px; background: rgba(234, 179, 8, 0.4); }
         
@@ -137,7 +138,7 @@
 
     <!-- MAIN MENU / HANGAR SHOP -->
     <div id="builder-screen">
-        <h1>AIR & GROUND WARFARE (v2.0)</h1>
+        <h1>AIR & GROUND WARFARE (v2.3)</h1>
         <div class="cash-display">BALANCE: $<span id="menu-credits">0</span></div>
 
         <div class="shop-title">-- HANGAR AIRCRAFT SHOP --</div>
@@ -234,6 +235,7 @@
     <div id="mobile-controls">
         <div class="touch-btn" id="btn-throttle-up">THR+</div>
         <div class="touch-btn" id="btn-throttle-down">THR-</div>
+        <div class="touch-btn" id="btn-brake">BRK</div>
         <div class="touch-btn" id="btn-fire">FIRE</div>
         <div class="touch-btn" id="btn-bomb">BOMB</div>
 
@@ -246,7 +248,7 @@
     </div>
 
     <div id="controls-hint">
-        KEYBOARD CONTROLS: W/S (Throttle) | A/D (Roll) | Q/E (Rudder Yaw) | ARROWS (Pitch) | SPACE (Cannon) | B (Bomb) | G (Gear)
+        KEYBOARD CONTROLS: W/S (Throttle) | C (Airbrake) | A/D (Roll) | Q/E (Rudder Yaw) | ARROWS (Pitch) | SPACE (Cannon) | B (Bomb) | G (Gear)
     </div>
 
     <div id="game-over">
@@ -282,10 +284,71 @@
         let conn = null;
         let myPlayerIndex = 0;
 
+        // Sound System
+        let audioCtx, engineOsc, engineGain, noiseNode, noiseGain;
+
         const GROUND_LEVEL = -21.2;
         const SPAWN_ALTITUDE = GROUND_LEVEL + 1.2;
 
         const keys = {};
+
+        function initAudio() {
+            if (audioCtx) return;
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            audioCtx = new AudioContext();
+
+            // Main Engine Pitch Tone
+            engineOsc = audioCtx.createOscillator();
+            engineOsc.type = 'sawtooth';
+            engineOsc.frequency.setValueAtTime(60, audioCtx.currentTime);
+
+            engineGain = audioCtx.createGain();
+            engineGain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+
+            // Engine Air/Wind Noise
+            const bufferSize = audioCtx.sampleRate * 2;
+            const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const output = noiseBuffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                output[i] = Math.random() * 2 - 1;
+            }
+
+            noiseNode = audioCtx.createBufferSource();
+            noiseNode.buffer = noiseBuffer;
+            noiseNode.loop = true;
+
+            const noiseFilter = audioCtx.createBiquadFilter();
+            noiseFilter.type = 'lowpass';
+            noiseFilter.frequency.setValueAtTime(300, audioCtx.currentTime);
+
+            noiseGain = audioCtx.createGain();
+            noiseGain.gain.setValueAtTime(0.02, audioCtx.currentTime);
+
+            engineOsc.connect(engineGain);
+            engineGain.connect(audioCtx.destination);
+
+            noiseNode.connect(noiseFilter);
+            noiseFilter.connect(noiseGain);
+            noiseGain.connect(audioCtx.destination);
+
+            engineOsc.start();
+            noiseNode.start();
+        }
+
+        function updateEngineAudio(throttle, speed) {
+            if (!audioCtx) return;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+
+            const now = audioCtx.currentTime;
+            // Pitch adjusts based on throttle and forward speed
+            const targetFreq = 40 + (throttle * 180) + (speed * 100);
+            engineOsc.frequency.setTargetAtTime(targetFreq, now, 0.1);
+
+            // Volume modulates slightly with power output
+            const targetVol = 0.02 + (throttle * 0.08);
+            engineGain.gain.setTargetAtTime(targetVol, now, 0.1);
+            noiseGain.gain.setTargetAtTime(0.01 + (speed * 0.05), now, 0.1);
+        }
 
         function saveUserData() {
             localStorage.setItem('flightgame_credits', playerCredits);
@@ -345,6 +408,7 @@
 
             bindTouch('btn-throttle-up', 'KeyW');
             bindTouch('btn-throttle-down', 'KeyS');
+            bindTouch('btn-brake', 'KeyC');
             bindTouch('btn-fire', 'Space');
             bindTouch('btn-bomb', 'KeyB');
             bindTouch('dpad-up', 'ArrowDown');
@@ -354,6 +418,7 @@
         }
 
         function startGame() {
+            initAudio();
             gameMode = document.getElementById('mode-select').value;
 
             if (gameMode === 'ONLINE_HOST') {
@@ -439,14 +504,19 @@
 
             players[myPlayerIndex] = {
                 id: myPlayerIndex + 1, mesh: p1Obj, camera: setupCamera(p1Obj), health: 100, score: 0,
-                throttle: 0.0, forwardSpeed: 0.0,
+                throttle: 0.0,
+                velocity: new THREE.Vector3(),
                 pitchRate: 0, rollRate: 0, yawRate: 0,
-                lastShoot: 0, gearDown: true, lastGearToggle: 0
+                lastShoot: 0, gearDown: true, lastGearToggle: 0,
+                airbrakeActive: false
             };
 
             updateMenuUI();
 
-            window.addEventListener('keydown', e => keys[e.code] = true);
+            window.addEventListener('keydown', e => {
+                keys[e.code] = true;
+                if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+            });
             window.addEventListener('keyup', e => keys[e.code] = false);
             window.addEventListener('resize', onWindowResize);
         }
@@ -586,43 +656,84 @@
 
                 const now = Date.now();
 
-                // 1. Throttle (W / S)
+                // 1. Throttle Input
+                p.airbrakeActive = !!keys.KeyC;
+
                 if (keys.KeyW) p.throttle = Math.min(1.0, p.throttle + 0.01);
                 if (keys.KeyS) p.throttle = Math.max(0.0, p.throttle - 0.01);
-                p.forwardSpeed += (p.throttle * 0.85 - p.forwardSpeed) * 0.03;
 
+                // Spin propeller based on throttle setting
                 if (p.mesh.userData.propeller) {
-                    p.mesh.userData.propeller.rotation.z += p.forwardSpeed * 2.5;
+                    p.mesh.userData.propeller.rotation.z += p.throttle * 2.5;
                 }
 
-                // 2. Pitch (Up Arrow / Down Arrow)
+                // 2. Continuous Aerodynamic Thrust & Momentum Physics
+                const forwardDir = new THREE.Vector3(0, 0, -1).applyQuaternion(p.mesh.quaternion);
+                const engineThrust = forwardDir.clone().multiplyScalar(p.throttle * 0.95);
+
+                // Add thrust force to current velocity vector
+                p.velocity.add(engineThrust.multiplyScalar(0.04));
+
+                // Aerodynamic drag damping
+                let dragFactor = p.airbrakeActive ? 0.95 : 0.988;
+
+                const speed = p.velocity.length();
+
+                // Ground Contact & Lateral Friction / Drift Mechanics
+                const isOnGround = p.mesh.position.y <= SPAWN_ALTITUDE;
+                if (isOnGround) {
+                    // Separate forward vector and lateral vector
+                    const rightDir = new THREE.Vector3(1, 0, 0).applyQuaternion(p.mesh.quaternion);
+                    
+                    // Measure lateral drift component velocity
+                    const lateralVel = rightDir.multiplyScalar(p.velocity.dot(rightDir));
+                    const forwardVel = forwardDir.multiplyScalar(p.velocity.dot(forwardDir));
+
+                    // High lateral friction (slides/drifts smoothly instead of instant stop)
+                    p.velocity.copy(forwardVel).add(lateralVel.multiplyScalar(0.92));
+                    dragFactor = 0.97; // Extra tire friction on ground
+                }
+
+                p.velocity.multiplyScalar(dragFactor);
+
+                // Gravity effect: lower speeds cause slight downward drift midair
+                if (!isOnGround && speed < 0.4) {
+                    p.velocity.y -= (0.4 - speed) * 0.02;
+                }
+
+                // Apply true position change from velocity vector
+                p.mesh.position.add(p.velocity);
+
+                // Update Audio Dynamics
+                if (p.id === myPlayerIndex + 1) {
+                    updateEngineAudio(p.throttle, speed);
+                }
+
+                // 3. Pitch, Roll, Yaw Handling
                 if (keys.ArrowDown) p.pitchRate = Math.min(0.025, p.pitchRate + 0.002);
                 else if (keys.ArrowUp) p.pitchRate = Math.max(-0.025, p.pitchRate - 0.002);
                 else p.pitchRate *= 0.85;
 
-                // 3. Roll (A / D)
                 if (keys.KeyA) p.rollRate = Math.min(0.03, p.rollRate + 0.003);
                 else if (keys.KeyD) p.rollRate = Math.max(-0.03, p.rollRate - 0.003);
                 else p.rollRate *= 0.8;
 
-                // 4. Rudder / Yaw (Q / E)
                 if (keys.KeyQ) p.yawRate = Math.min(0.02, p.yawRate + 0.002);
                 else if (keys.KeyE) p.yawRate = Math.max(-0.02, p.yawRate - 0.002);
                 else p.yawRate *= 0.8;
 
-                // Apply Smooth Local Rotations
+                // Apply Local Rotations
                 p.mesh.rotateX(p.pitchRate);
                 p.mesh.rotateY(p.yawRate);
                 p.mesh.rotateZ(-p.rollRate);
 
-                // Movement Forward
-                const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(p.mesh.quaternion);
-                p.mesh.position.add(fwd.multiplyScalar(p.forwardSpeed));
+                // Ground floor boundary collision
+                if (p.mesh.position.y <= SPAWN_ALTITUDE) {
+                    p.mesh.position.y = SPAWN_ALTITUDE;
+                    p.velocity.y = Math.max(0, p.velocity.y);
+                }
 
-                // Ground boundary collision
-                if (p.mesh.position.y <= SPAWN_ALTITUDE) p.mesh.position.y = SPAWN_ALTITUDE;
-
-                // 5. Landing Gear Toggle & Animation (G)
+                // 4. Landing Gear Toggle & Animation (G)
                 if (keys.KeyG && now - p.lastGearToggle > 300) {
                     p.gearDown = !p.gearDown;
                     p.lastGearToggle = now;
@@ -647,7 +758,10 @@
                 }
 
                 // HUD Stats
-                document.getElementById('p1-hud-speed').innerText = Math.round(p.forwardSpeed * 200) + ' SPD';
+                const displaySpeed = Math.round(speed * 200);
+                document.getElementById('p1-hud-speed').innerText = p.airbrakeActive 
+                    ? `AIRBRAKE (${displaySpeed} SPD)` 
+                    : `${displaySpeed} SPD`;
                 document.getElementById('p1-hud-alt').innerText = Math.max(0, Math.round((p.mesh.position.y - SPAWN_ALTITUDE) * 10)) + ' FT';
             });
         }
@@ -663,7 +777,7 @@
         function dropBomb(player) {
             const bomb = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, 1.5), new THREE.MeshLambertMaterial({ color: 0x111111 }));
             bomb.position.copy(player.mesh.position);
-            bomb.userData = { velocity: new THREE.Vector3(0, -0.2, -player.forwardSpeed), owner: player };
+            bomb.userData = { velocity: new THREE.Vector3(0, -0.2, -player.velocity.length()), owner: player };
             scene.add(bomb);
             bombs.push(bomb);
         }
@@ -789,4 +903,4 @@
         updateMenuUI();
     </script>
 </body>
-</html>ok
+</html>
