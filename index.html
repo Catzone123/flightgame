@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Retro Pixel Dogfight v2.5 - Full Warfare & Audio</title>
+    <title>Retro Pixel Dogfight v2.5 - Full Air Warfare</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
@@ -29,7 +29,7 @@
             background: #111; border: 3px solid #00ff66; padding: 15px; width: 100%; max-width: 480px;
             display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px;
         }
-        .option-row { display: flex; justify-content: space-between; align-items: center; font-size: 9px; }
+        .option-row { display: flex; justify-space-between; align-items: center; font-size: 9px; }
         .option-row label { color: #aaa; }
         .option-row input, .option-row select {
             background: #222; border: 1px solid #00ff66; color: #fff; padding: 5px; font-family: 'Press Start 2P', monospace; font-size: 9px;
@@ -601,28 +601,33 @@
         }
 
         function spawnAllyPlanes() {
-            for (let i = 0; i < 3; i++) {
+            for (let i = 0; i < 4; i++) {
                 const allyMesh = createPlaneModel(0x1e40af, 0x3b82f6, 'interceptor');
-                allyMesh.position.set(-100 + (i * 100), 100, -100);
+                allyMesh.position.set(-150 + (i * 100), 500, -100);
                 scene.add(allyMesh);
                 allies.push({
                     mesh: allyMesh,
                     health: 100,
-                    speed: 1.2,
+                    speed: 1.4,
                     lastShot: 0
                 });
             }
         }
 
         function spawnEnemyPlanes() {
-            for (let i = 0; i < 6; i++) {
+            // Spawns 10 enemy fighters at broad high/low altitudes across the entire combat zone
+            for (let i = 0; i < 10; i++) {
                 const enemyMesh = createPlaneModel(0x991b1b, 0xd97706, 'interceptor');
-                enemyMesh.position.set((Math.random() - 0.5) * 3000, 120 + Math.random() * 100, -2000 - Math.random() * 3000);
+                enemyMesh.position.set(
+                    (Math.random() - 0.5) * 4000, 
+                    300 + Math.random() * 1200, 
+                    -1000 - Math.random() * 4000
+                );
                 scene.add(enemyMesh);
                 enemies.push({
                     mesh: enemyMesh,
                     health: 80,
-                    speed: 1.1,
+                    speed: 1.3,
                     lastShot: 0
                 });
             }
@@ -793,7 +798,7 @@
                 if (target) {
                     ally.mesh.lookAt(target.mesh.position);
                     ally.mesh.translateZ(-ally.speed);
-                    if (minDist < 600 && now - ally.lastShot > 300) {
+                    if (minDist < 1200 && now - ally.lastShot > 300) {
                         const bullet = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 1.0), new THREE.MeshBasicMaterial({ color: 0x3b82f6 }));
                         bullet.position.copy(ally.mesh.position);
                         bullet.userData = { velocity: new THREE.Vector3(0, 0, -1).applyQuaternion(ally.mesh.quaternion).multiplyScalar(2.2), owner: ally };
@@ -817,7 +822,7 @@
                     enemy.mesh.translateZ(-enemy.speed);
 
                     const dist = enemy.mesh.position.distanceTo(target.position);
-                    if (dist < 700 && now - enemy.lastShot > 400) {
+                    if (dist < 1500 && now - enemy.lastShot > 400) {
                         const bullet = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 1.0), new THREE.MeshBasicMaterial({ color: 0xef4444 }));
                         bullet.position.copy(enemy.mesh.position);
                         bullet.userData = { velocity: new THREE.Vector3(0, 0, -1).applyQuaternion(enemy.mesh.quaternion).multiplyScalar(2.0) };
@@ -853,7 +858,7 @@
                 if (!player || player.health <= 0) return;
                 const dist = tank.position.distanceTo(player.mesh.position);
 
-                if (dist < 400 && now - tank.userData.lastShot > 2000) {
+                if (dist < 800 && now - tank.userData.lastShot > 2000) {
                     const shell = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.8), new THREE.MeshBasicMaterial({ color: 0xff4400 }));
                     shell.position.copy(tank.position);
                     const dir = new THREE.Vector3().subVectors(player.mesh.position, tank.position).normalize();
@@ -958,7 +963,7 @@
             if (!minimapCtx || !players[myPlayerIndex]) return;
             const px = players[myPlayerIndex].mesh.position.x;
             const pz = players[myPlayerIndex].mesh.position.z;
-            const radarRadius = 2500;
+            const radarRadius = 3500;
             const mapSize = 130;
             const center = mapSize / 2;
 
