@@ -573,9 +573,15 @@
         }
 
         function spawnAllyPlanes() {
-            for (let i = 0; i < 4; i++) {
+            // Continuously refill to maintain 4 allies
+            while (allies.length < 4) {
                 const allyMesh = createPlaneModel(0x1e40af, 0x3b82f6, 'interceptor');
-                allyMesh.position.set(-100 + (i * 50), SPAWN_ALTITUDE + 10, -100);
+                const playerPos = players[myPlayerIndex] ? players[myPlayerIndex].mesh.position : new THREE.Vector3(0, 0, 0);
+                allyMesh.position.set(
+                    playerPos.x + (Math.random() - 0.5) * 400,
+                    SPAWN_ALTITUDE + 10 + Math.random() * 50,
+                    playerPos.z + (Math.random() - 0.5) * 400
+                );
                 scene.add(allyMesh);
                 allies.push({
                     mesh: allyMesh,
@@ -587,12 +593,14 @@
         }
 
         function spawnEnemyPlanes() {
-            for (let i = 0; i < 10; i++) {
+            // Continuously refill to maintain 10 enemies
+            while (enemies.length < 10) {
                 const enemyMesh = createPlaneModel(0x991b1b, 0xd97706, 'interceptor');
+                const playerPos = players[myPlayerIndex] ? players[myPlayerIndex].mesh.position : new THREE.Vector3(0, 0, 0);
                 enemyMesh.position.set(
-                    (Math.random() - 0.5) * 1000, 
+                    playerPos.x + (Math.random() - 0.5) * 1200, 
                     SPAWN_ALTITUDE + 20 + Math.random() * 200, 
-                    -300 - Math.random() * 1000
+                    playerPos.z - 500 - Math.random() * 800
                 );
                 scene.add(enemyMesh);
                 enemies.push({
@@ -985,6 +993,8 @@
         function animate() {
             requestAnimationFrame(animate);
             if (!isGameOver) {
+                spawnAllyPlanes();   // Keeps allies at 4 continuously
+                spawnEnemyPlanes();  // Keeps enemies at 10 continuously
                 updatePlayers();
                 updateAIPlanes();
                 updateProjectiles();
