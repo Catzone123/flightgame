@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Retro Pixel Dogfight v2.5 - Full Air Warfare</title>
+    <title>Retro Pixel Dogfight v2.6 - Rapid-Fire Missiles</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
@@ -29,7 +29,7 @@
             background: #111; border: 3px solid #00ff66; padding: 15px; width: 100%; max-width: 480px;
             display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px;
         }
-        .option-row { display: flex; justify-space-between; align-items: center; font-size: 9px; }
+        .option-row { display: flex; justify-content: space-between; align-items: center; font-size: 9px; }
         .option-row label { color: #aaa; }
         .option-row input, .option-row select {
             background: #222; border: 1px solid #00ff66; color: #fff; padding: 5px; font-family: 'Press Start 2P', monospace; font-size: 9px;
@@ -97,7 +97,7 @@
         }
         .touch-btn {
             position: absolute; background: rgba(255, 255, 255, 0.2); border: 2px solid rgba(255, 255, 255, 0.5);
-            color: #fff; font-family: 'Press Start 2P', monospace; font-size: 10px; border-radius: 50%;
+            color: #fff; font-family: 'Press Start 2P', monospace; font-size: 9px; border-radius: 50%;
             display: flex; align-items: center; justify-content: center; pointer-events: auto; user-select: none;
         }
         .touch-btn:active { background: rgba(0, 255, 102, 0.5); }
@@ -105,8 +105,8 @@
         #btn-throttle-up { bottom: 90px; left: 20px; width: 50px; height: 50px; }
         #btn-throttle-down { bottom: 30px; left: 20px; width: 50px; height: 50px; }
         #btn-brake { bottom: 150px; left: 20px; width: 50px; height: 50px; background: rgba(239, 68, 68, 0.4); }
-        #btn-fire { bottom: 30px; right: 20px; width: 65px; height: 65px; background: rgba(239, 68, 68, 0.4); }
-        #btn-bomb { bottom: 105px; right: 20px; width: 55px; height: 55px; background: rgba(234, 179, 8, 0.4); }
+        #btn-fire { bottom: 30px; right: 20px; width: 60px; height: 60px; background: rgba(239, 68, 68, 0.4); }
+        #btn-missile { bottom: 100px; right: 20px; width: 60px; height: 60px; background: rgba(245, 158, 11, 0.5); }
         
         #dpad-container {
             position: absolute; bottom: 30px; left: 90px; width: 110px; height: 110px; pointer-events: auto;
@@ -138,7 +138,7 @@
 
     <!-- MAIN MENU / HANGAR SHOP -->
     <div id="builder-screen">
-        <h1>AIR & GROUND WARFARE (v2.5)</h1>
+        <h1>AIR WARFARE (v2.6)</h1>
         <div class="cash-display">BALANCE: $<span id="menu-credits">0</span></div>
 
         <div class="shop-title">-- HANGAR AIRCRAFT SHOP --</div>
@@ -236,8 +236,8 @@
         <div class="touch-btn" id="btn-throttle-up">THR+</div>
         <div class="touch-btn" id="btn-throttle-down">THR-</div>
         <div class="touch-btn" id="btn-brake">BRK</div>
-        <div class="touch-btn" id="btn-fire">FIRE</div>
-        <div class="touch-btn" id="btn-bomb">BOMB</div>
+        <div class="touch-btn" id="btn-fire">GUN</div>
+        <div class="touch-btn" id="btn-missile">MISL</div>
 
         <div id="dpad-container">
             <div class="dpad-btn" id="dpad-up">▲</div>
@@ -248,7 +248,7 @@
     </div>
 
     <div id="controls-hint">
-        KEYBOARD CONTROLS: W/S (Throttle) | C (Airbrake) | A/D (Roll) | Q/E (Rudder Yaw) | ARROWS (Pitch) | SPACE (Cannon) | B (Bomb) | G (Gear)
+        KEYBOARD CONTROLS: W/S (Throttle) | C (Airbrake) | A/D (Roll) | Q/E (Rudder Yaw) | ARROWS (Pitch) | SPACE (Cannon) | F (Missile) | G (Gear)
     </div>
 
     <div id="game-over">
@@ -264,11 +264,9 @@
         let players = [];
         let allies = [];
         let enemies = [];
-        let tanks = [];
         let playerBullets = [];
+        let playerMissiles = [];
         let enemyBullets = [];
-        let tankShells = [];
-        let bombs = [];
 
         let airportsList = [];
         let enemyBasesList = [];
@@ -382,7 +380,7 @@
                 updateMenuUI();
                 selectPlaneType(type);
             } else if (playerCredits < cost) {
-                alert("Not enough credits! Destroy enemy tanks and planes to earn cash.");
+                alert("Not enough credits! Destroy enemy planes to earn cash.");
             }
         }
 
@@ -408,7 +406,7 @@
             bindTouch('btn-throttle-down', 'KeyS');
             bindTouch('btn-brake', 'KeyC');
             bindTouch('btn-fire', 'Space');
-            bindTouch('btn-bomb', 'KeyB');
+            bindTouch('btn-missile', 'KeyF');
             bindTouch('dpad-up', 'ArrowDown');
             bindTouch('dpad-down', 'ArrowUp');
             bindTouch('dpad-left', 'KeyA');
@@ -491,7 +489,6 @@
             createWorldTerrainAndRiver();
             generateAirports();
             generateEnemyCountry();
-            spawnTanks();
             spawnAllyPlanes();
             spawnEnemyPlanes();
 
@@ -507,7 +504,7 @@
                 throttle: 0.0,
                 velocity: new THREE.Vector3(),
                 pitchRate: 0, rollRate: 0, yawRate: 0,
-                lastShoot: 0, gearDown: true, lastGearToggle: 0,
+                lastShoot: 0, lastMissile: 0, gearDown: true, lastGearToggle: 0,
                 airbrakeActive: false
             };
 
@@ -575,31 +572,6 @@
             }
         }
 
-        function spawnTanks() {
-            const tankMat = new THREE.MeshLambertMaterial({ color: 0x3f3f46 });
-            const turretMat = new THREE.MeshLambertMaterial({ color: 0x18181b });
-
-            for (let i = 0; i < 25; i++) {
-                const tank = new THREE.Group();
-                const body = new THREE.Mesh(new THREE.BoxGeometry(4, 1.8, 6), tankMat);
-                const turret = new THREE.Mesh(new THREE.BoxGeometry(2.5, 1.2, 2.5), turretMat);
-                turret.position.y = 1.2;
-                const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 3.5), turretMat);
-                barrel.rotation.x = Math.PI / 2;
-                barrel.position.set(0, 1.2, 2.0);
-
-                tank.add(body, turret, barrel);
-
-                const posX = (Math.random() - 0.5) * 6000;
-                const posZ = -2000 - Math.random() * 4000;
-                tank.position.set(posX, GROUND_LEVEL + 0.9, posZ);
-
-                tank.userData = { health: 40, lastShot: 0 };
-                scene.add(tank);
-                tanks.push(tank);
-            }
-        }
-
         function spawnAllyPlanes() {
             for (let i = 0; i < 4; i++) {
                 const allyMesh = createPlaneModel(0x1e40af, 0x3b82f6, 'interceptor');
@@ -615,7 +587,6 @@
         }
 
         function spawnEnemyPlanes() {
-            // Spawns 10 enemy fighters at broad high/low altitudes across the entire combat zone
             for (let i = 0; i < 10; i++) {
                 const enemyMesh = createPlaneModel(0x991b1b, 0xd97706, 'interceptor');
                 enemyMesh.position.set(
@@ -764,10 +735,10 @@
                     shootBullet(p);
                     p.lastShoot = now;
                 }
-                if (keys.KeyB && !p.hasBomb) {
-                    dropBomb(p);
-                    p.hasBomb = true;
-                    setTimeout(() => p.hasBomb = false, 2000);
+
+                if (keys.KeyF && now - p.lastMissile > 200) {
+                    launchMissile(p);
+                    p.lastMissile = now;
                 }
 
                 const displaySpeed = Math.round(speed * 200);
@@ -842,44 +813,56 @@
             playerBullets.push(bullet);
         }
 
-        function dropBomb(player) {
-            const bomb = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, 1.5), new THREE.MeshLambertMaterial({ color: 0x111111 }));
-            bomb.position.copy(player.mesh.position);
-            bomb.userData = { velocity: new THREE.Vector3(0, -0.2, -player.velocity.length()), owner: player };
-            scene.add(bomb);
-            bombs.push(bomb);
-        }
+        function launchMissile(player) {
+            const group = new THREE.Group();
+            
+            // Missile body
+            const body = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.2, 0.2, 2.0, 8),
+                new THREE.MeshBasicMaterial({ color: 0xffffff })
+            );
+            body.rotation.x = Math.PI / 2;
+            group.add(body);
 
-        function updateTanksAndCombat() {
-            const now = Date.now();
-            const player = players[myPlayerIndex];
+            // Engine Trail / Flame
+            const trail = new THREE.Mesh(
+                new THREE.ConeGeometry(0.25, 1.0, 8),
+                new THREE.MeshBasicMaterial({ color: 0xff4500 })
+            );
+            trail.rotation.x = -Math.PI / 2;
+            trail.position.z = 1.2;
+            group.add(trail);
 
-            tanks.forEach(tank => {
-                if (!player || player.health <= 0) return;
-                const dist = tank.position.distanceTo(player.mesh.position);
+            group.position.copy(player.mesh.position);
+            group.quaternion.copy(player.mesh.quaternion);
 
-                if (dist < 800 && now - tank.userData.lastShot > 2000) {
-                    const shell = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.8), new THREE.MeshBasicMaterial({ color: 0xff4400 }));
-                    shell.position.copy(tank.position);
-                    const dir = new THREE.Vector3().subVectors(player.mesh.position, tank.position).normalize();
-                    shell.userData = { velocity: dir.multiplyScalar(1.5) };
-                    scene.add(shell);
-                    tankShells.push(shell);
-                    tank.userData.lastShot = now;
+            // Lock onto nearest enemy jet
+            let target = null;
+            let minDist = Infinity;
+            enemies.forEach(e => {
+                if (e.health > 0) {
+                    const d = player.mesh.position.distanceTo(e.mesh.position);
+                    if (d < minDist && d < 2500) { minDist = d; target = e; }
                 }
             });
 
-            for (let i = tankShells.length - 1; i >= 0; i--) {
-                const s = tankShells[i];
-                s.position.add(s.userData.velocity);
-                if (player && s.position.distanceTo(player.mesh.position) < 3.0) {
-                    player.health -= 8;
-                    document.getElementById('p1-health').style.width = Math.max(0, player.health) + '%';
-                    scene.remove(s);
-                    tankShells.splice(i, 1);
-                }
-            }
+            const forwardVector = new THREE.Vector3(0, 0, -1).applyQuaternion(player.mesh.quaternion).multiplyScalar(3.5);
 
+            group.userData = {
+                velocity: forwardVector,
+                owner: player,
+                target: target,
+                life: 180
+            };
+
+            scene.add(group);
+            playerMissiles.push(group);
+        }
+
+        function updateProjectiles() {
+            const player = players[myPlayerIndex];
+
+            // Enemy bullets hitting player
             for (let i = enemyBullets.length - 1; i >= 0; i--) {
                 const eb = enemyBullets[i];
                 eb.position.add(eb.userData.velocity);
@@ -891,30 +874,7 @@
                 }
             }
 
-            for (let i = bombs.length - 1; i >= 0; i--) {
-                const b = bombs[i];
-                b.userData.velocity.y -= 0.015;
-                b.position.add(b.userData.velocity);
-
-                if (b.position.y <= GROUND_LEVEL) {
-                    tanks.forEach((tank, tIdx) => {
-                        if (tank.position.distanceTo(b.position) < 80) {
-                            scene.remove(tank);
-                            tanks.splice(tIdx, 1);
-                            playerCredits += 50;
-                            player.score++;
-                            saveUserData();
-                            document.getElementById('p1-score').innerText = player.score;
-                            document.getElementById('p1-cash').innerText = playerCredits;
-                        }
-                    });
-                    scene.remove(b);
-                    bombs.splice(i, 1);
-                }
-            }
-        }
-
-        function updateProjectiles() {
+            // Player cannon bullets
             for (let i = playerBullets.length - 1; i >= 0; i--) {
                 const b = playerBullets[i];
                 b.position.add(b.userData.velocity);
@@ -937,25 +897,50 @@
                         }
                     }
                 });
+            }
 
-                tanks.forEach((tank, tIdx) => {
-                    if (b && b.position.distanceTo(tank.position) < 4.0) {
-                        tank.userData.health -= 20;
-                        scene.remove(b);
-                        playerBullets.splice(i, 1);
-                        if (tank.userData.health <= 0) {
-                            scene.remove(tank);
-                            tanks.splice(tIdx, 1);
-                            playerCredits += 50;
+            // Rapid-fire Missiles tracking & collision
+            for (let i = playerMissiles.length - 1; i >= 0; i--) {
+                const m = playerMissiles[i];
+                m.userData.life--;
+
+                if (m.userData.life <= 0) {
+                    scene.remove(m);
+                    playerMissiles.splice(i, 1);
+                    continue;
+                }
+
+                // Missile homing guidance
+                if (m.userData.target && m.userData.target.health > 0) {
+                    const targetDir = m.userData.target.mesh.position.clone().sub(m.position).normalize();
+                    m.userData.velocity.lerp(targetDir.multiplyScalar(3.5), 0.08);
+                    m.lookAt(m.position.clone().add(m.userData.velocity));
+                }
+
+                m.position.add(m.userData.velocity);
+
+                // Collision checks
+                for (let eIdx = enemies.length - 1; eIdx >= 0; eIdx--) {
+                    const enemy = enemies[eIdx];
+                    if (m.position.distanceTo(enemy.mesh.position) < 8.0) {
+                        enemy.health -= 60; // High missile damage
+                        scene.remove(m);
+                        playerMissiles.splice(i, 1);
+
+                        if (enemy.health <= 0) {
+                            scene.remove(enemy.mesh);
+                            enemies.splice(eIdx, 1);
+                            playerCredits += 100;
                             saveUserData();
-                            if (b.userData.owner && b.userData.owner.score !== undefined) {
-                                b.userData.owner.score++;
-                                document.getElementById('p1-score').innerText = b.userData.owner.score;
+                            if (m.userData.owner && m.userData.owner.score !== undefined) {
+                                m.userData.owner.score++;
+                                document.getElementById('p1-score').innerText = m.userData.owner.score;
                             }
                             document.getElementById('p1-cash').innerText = playerCredits;
                         }
+                        break;
                     }
-                });
+                }
             }
         }
 
@@ -968,14 +953,6 @@
             const center = mapSize / 2;
 
             minimapCtx.clearRect(0, 0, mapSize, mapSize);
-
-            // Ground Tanks (Orange)
-            minimapCtx.fillStyle = '#f97316';
-            tanks.forEach(t => {
-                const rx = center + ((t.position.x - px) / radarRadius) * center;
-                const ry = center + ((t.position.z - pz) / radarRadius) * center;
-                minimapCtx.fillRect(rx - 2, ry - 2, 4, 4);
-            });
 
             // Enemy Planes (Red)
             minimapCtx.fillStyle = '#ef4444';
@@ -1010,7 +987,6 @@
             if (!isGameOver) {
                 updatePlayers();
                 updateAIPlanes();
-                updateTanksAndCombat();
                 updateProjectiles();
                 drawMinimap();
             }
