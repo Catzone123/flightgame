@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Retro Pixel Dogfight v2.6 - Rapid-Fire Missiles</title>
+    <title>Retro Pixel Dogfight v3.0 - Events & Crash Mechanics</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
@@ -25,6 +25,14 @@
         #builder-screen h1 { color: #00ff66; margin-bottom: 10px; font-size: 16px; text-align: center; }
         .cash-display { color: #facc15; font-size: 12px; margin-bottom: 15px; }
 
+        /* Event Banner */
+        .event-banner {
+            width: 100%; max-width: 480px; background: linear-gradient(90deg, #b91c1c, #15803d);
+            border: 2px solid #facc15; border-radius: 6px; padding: 8px; text-align: center;
+            font-size: 8px; margin-bottom: 12px; color: #fff; display: none;
+            box-shadow: 0 0 10px rgba(250, 204, 21, 0.5);
+        }
+
         .builder-box {
             background: #111; border: 3px solid #00ff66; padding: 15px; width: 100%; max-width: 480px;
             display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px;
@@ -44,6 +52,7 @@
         }
         .plane-card.selected { border-color: #00ff66; background: #064e3b; }
         .plane-card.locked { opacity: 0.6; }
+        .plane-card.event-card { border-color: #ef4444; background: #450a0a; }
         .buy-btn {
             font-family: 'Press Start 2P', monospace; font-size: 7px; padding: 4px; background: #eab308;
             border: none; color: #000; cursor: pointer; border-radius: 2px; margin-top: 3px;
@@ -77,13 +86,6 @@
         .gauge-box { border: 1px solid #333; padding: 3px; background: #111; }
         .gauge-title { color: #888; font-size: 6px; margin-bottom: 2px; }
         .gauge-value { font-size: 8px; color: #fff; }
-
-        #territory-warning {
-            position: absolute; top: 40px; width: 100%; text-align: center;
-            color: #ff3333; font-size: 10px; font-weight: bold; text-shadow: 2px 2px #000;
-            display: none; z-index: 30; animation: blink 0.8s infinite;
-        }
-        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.2; } 100% { opacity: 1; } }
 
         #controls-hint {
             position: absolute; bottom: 5px; left: 10px; right: 10px; color: #aaa; font-size: 5px;
@@ -123,9 +125,10 @@
         #game-over {
             display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
             text-align: center; color: white; background: rgba(10, 10, 10, 0.95); padding: 30px;
-            border: 4px solid #fff; z-index: 60;
+            border: 4px solid #ef4444; z-index: 60; border-radius: 8px; width: 90%; max-width: 420px;
         }
         #game-over h1 { font-size: 16px; color: #ff3333; margin-bottom: 12px; }
+        #crash-reason { font-size: 8px; color: #facc15; margin-bottom: 15px; line-height: 1.5; }
         #restart-btn {
             font-family: 'Press Start 2P', monospace; padding: 10px 18px; font-size: 9px;
             color: #000; background-color: #00ff66; border: none; cursor: pointer; margin-top: 15px;
@@ -134,12 +137,21 @@
 </head>
 <body>
 
-    <div id="territory-warning">⚠️ WARNING: ENTERING ENEMY COUNTRY ⚠️</div>
-
     <!-- MAIN MENU / HANGAR SHOP -->
     <div id="builder-screen">
-        <h1>AIR WARFARE (v2.6)</h1>
+        <h1>AIR WARFARE (v3.0)</h1>
         <div class="cash-display">BALANCE: $<span id="menu-credits">0</span></div>
+
+        <!-- Dynamic Event Banners -->
+        <div id="aug9-banner" class="event-banner">
+            🎉 <strong>AUGUST 9TH SPECIAL EVENT!</strong> 🎉<br>
+            CLAIMED 1 LAKH DOLLARS ($100,000 CASH)!
+        </div>
+
+        <div id="xmas-banner" class="event-banner">
+            🎄 <strong>CHRISTMAS SPECIAL EVENT!</strong> 🎅<br>
+            UNLOCKED EXCLUSIVE X-MAS SLEIGH JET!
+        </div>
 
         <div class="shop-title">-- HANGAR AIRCRAFT SHOP --</div>
         <div class="plane-grid">
@@ -166,6 +178,13 @@
                 <span>SPEED: ★☆☆</span>
                 <span>ARMOR: ★★★★</span>
                 <button class="buy-btn" id="buy-biplane" onclick="buyPlane('biplane', 150, event)">BUY $150</button>
+            </div>
+            <!-- Christmas Event Plane -->
+            <div class="plane-card locked event-card" id="card-xmas" onclick="selectPlaneType('xmas')">
+                <strong>🎄 X-MAS SLEIGH 🎅</strong>
+                <span>SPEED: ★★★★★</span>
+                <span>ARMOR: ★★★☆</span>
+                <button class="buy-btn" id="buy-xmas" onclick="buyPlane('xmas', 1000, event)">EVENT $1,000</button>
             </div>
         </div>
 
@@ -248,12 +267,13 @@
     </div>
 
     <div id="controls-hint">
-        KEYBOARD CONTROLS: W/S (Throttle) | C (Airbrake) | A/D (Roll) | Q/E (Rudder Yaw) | ARROWS (Pitch) | SPACE (Cannon) | F (Missile) | G (Gear)
+        KEYBOARD CONTROLS: W/S (Throttle) | C (Airbrake) | A/D (Roll) | Q/E (Yaw) | ARROWS (Pitch) | SPACE (Cannon) | F (Missile) | G (Gear)
     </div>
 
     <div id="game-over">
-        <h1 id="over-title">MISSION OVER</h1>
-        <p>TOTAL DESTROYED: <span id="final-score">0</span></p>
+        <h1 id="over-title">CRASH DESTROYED</h1>
+        <div id="crash-reason">YOU CRASHED!</div>
+        <p>ENEMIES DESTROYED: <span id="final-score">0</span></p>
         <button id="restart-btn" onclick="location.reload()">RETURN TO HANGAR</button>
     </div>
 
@@ -267,9 +287,7 @@
         let playerBullets = [];
         let playerMissiles = [];
         let enemyBullets = [];
-
-        let airportsList = [];
-        let enemyBasesList = [];
+        let mountainObjects = [];
 
         let playerCredits = parseInt(localStorage.getItem('flightgame_credits') || '100');
         let unlockedPlanes = JSON.parse(localStorage.getItem('flightgame_unlocked') || '["interceptor"]');
@@ -291,6 +309,32 @@
         const SPAWN_ALTITUDE = GROUND_LEVEL + 1.2;
 
         const keys = {};
+
+        function checkSpecialEvents() {
+            const today = new Date();
+            const currentMonth = today.getMonth(); // 0 = Jan, 7 = Aug, 11 = Dec
+            const currentDay = today.getDate();
+
+            // 1. AUGUST 9TH EVENT ($100,000 / 1 Lakh Dollars)
+            if (currentMonth === 7 && currentDay === 9) {
+                const claimedYear = localStorage.getItem('flightgame_aug9_claimed');
+                if (claimedYear !== today.getFullYear().toString()) {
+                    playerCredits += 100000;
+                    localStorage.setItem('flightgame_aug9_claimed', today.getFullYear().toString());
+                    saveUserData();
+                    document.getElementById('aug9-banner').style.display = 'block';
+                }
+            }
+
+            // 2. CHRISTMAS EVENT (Special Xmas Jet Unlock)
+            if (currentMonth === 11 || currentMonth === 11 && currentDay >= 24) { // December
+                document.getElementById('xmas-banner').style.display = 'block';
+                if (!unlockedPlanes.includes('xmas')) {
+                    unlockedPlanes.push('xmas');
+                    saveUserData();
+                }
+            }
+        }
 
         function initAudio() {
             if (audioCtx) return;
@@ -354,10 +398,10 @@
         function updateMenuUI() {
             document.getElementById('menu-credits').innerText = playerCredits;
             
-            ['gunship', 'stealth', 'biplane'].forEach(type => {
+            ['gunship', 'stealth', 'biplane', 'xmas'].forEach(type => {
                 const card = document.getElementById(`card-${type}`);
                 const btn = document.getElementById(`buy-${type}`);
-                if (unlockedPlanes.includes(type)) {
+                if (card && unlockedPlanes.includes(type)) {
                     card.classList.remove('locked');
                     if (btn) btn.style.display = 'none';
                 }
@@ -411,6 +455,14 @@
             bindTouch('dpad-down', 'ArrowUp');
             bindTouch('dpad-left', 'KeyA');
             bindTouch('dpad-right', 'KeyD');
+        }
+
+        function triggerGameOver(reasonText) {
+            if (isGameOver) return;
+            isGameOver = true;
+            document.getElementById('crash-reason').innerText = reasonText;
+            document.getElementById('final-score').innerText = players[myPlayerIndex] ? players[myPlayerIndex].score : 0;
+            document.getElementById('game-over').style.display = 'block';
         }
 
         function startGame() {
@@ -487,8 +539,6 @@
             scene.add(sun);
 
             createWorldTerrainAndRiver();
-            generateAirports();
-            generateEnemyCountry();
             spawnAllyPlanes();
             spawnEnemyPlanes();
 
@@ -527,53 +577,67 @@
             land.position.y = GROUND_LEVEL;
             scene.add(land);
 
-            const riverCurve = new THREE.CatmullRomCurve3([
-                new THREE.Vector3(-4000, GROUND_LEVEL + 0.1, -8000),
-                new THREE.Vector3(-1200, GROUND_LEVEL + 0.1, -4000),
-                new THREE.Vector3(800, GROUND_LEVEL + 0.1, 0),
-                new THREE.Vector3(-600, GROUND_LEVEL + 0.1, 4000),
-                new THREE.Vector3(2000, GROUND_LEVEL + 0.1, 8000)
+            const mountainMat = new THREE.MeshLambertMaterial({ color: 0x4b5563, flatShading: true });
+            const snowCapMat = new THREE.MeshLambertMaterial({ color: 0xf8fafc, flatShading: true });
+
+            const mountainClusters = [
+                { x: -3500, z: -2000, count: 22, maxRadius: 3000, maxHeight: 650 },
+                { x: 3800, z: -4000, count: 25, maxRadius: 3500, maxHeight: 800 },
+                { x: -4000, z: 3000, count: 18, maxRadius: 2800, maxHeight: 550 },
+                { x: 4200, z: 2500, count: 20, maxRadius: 2500, maxHeight: 600 }
+            ];
+
+            mountainClusters.forEach(cluster => {
+                for (let i = 0; i < cluster.count; i++) {
+                    const radius = 120 + Math.random() * 220;
+                    const height = 250 + Math.random() * (cluster.maxHeight - 250);
+                    const segments = 6 + Math.floor(Math.random() * 4);
+
+                    const coneGeo = new THREE.ConeGeometry(radius, height, segments);
+                    const mtn = new THREE.Mesh(coneGeo, mountainMat);
+
+                    const ox = cluster.x + (Math.random() - 0.5) * cluster.maxRadius;
+                    const oz = cluster.z + (Math.random() - 0.5) * cluster.maxRadius;
+
+                    mtn.position.set(ox, GROUND_LEVEL + height / 2, oz);
+                    mtn.rotation.y = Math.random() * Math.PI;
+                    scene.add(mtn);
+
+                    // Track collision bounds for mountains
+                    mountainObjects.push({
+                        pos: new THREE.Vector3(ox, GROUND_LEVEL, oz),
+                        radius: radius * 0.85,
+                        height: height
+                    });
+
+                    if (height > 400) {
+                        const capHeight = height * 0.3;
+                        const capGeo = new THREE.ConeGeometry(radius * 0.32, capHeight, segments);
+                        const snowCap = new THREE.Mesh(capGeo, snowCapMat);
+                        snowCap.position.set(ox, GROUND_LEVEL + height - capHeight / 2, oz);
+                        snowCap.rotation.y = mtn.rotation.y;
+                        scene.add(snowCap);
+                    }
+                }
+            });
+
+            // Primary Main River
+            const mainRiverCurve = new THREE.CatmullRomCurve3([
+                new THREE.Vector3(-6000, GROUND_LEVEL + 0.15, -10000),
+                new THREE.Vector3(-3000, GROUND_LEVEL + 0.15, -5000),
+                new THREE.Vector3(-800, GROUND_LEVEL + 0.15, -2000),
+                new THREE.Vector3(1200, GROUND_LEVEL + 0.15, 1000),
+                new THREE.Vector3(-500, GROUND_LEVEL + 0.15, 4500),
+                new THREE.Vector3(3500, GROUND_LEVEL + 0.15, 9000)
             ]);
 
-            const riverGeo = new THREE.TubeGeometry(riverCurve, 100, 60, 8, false);
+            const mainRiverGeo = new THREE.TubeGeometry(mainRiverCurve, 120, 110, 8, false);
             const riverMat = new THREE.MeshLambertMaterial({ color: 0x0284c7 });
-            const riverMesh = new THREE.Mesh(riverGeo, riverMat);
-            scene.add(riverMesh);
-        }
-
-        function generateAirports() {
-            for (let i = 0; i < 40; i++) {
-                const posX = (Math.random() - 0.5) * 8000;
-                const posZ = (Math.random() - 0.5) * 8000;
-
-                const runway = new THREE.Mesh(
-                    new THREE.BoxGeometry(40, 0.2, 300),
-                    new THREE.MeshLambertMaterial({ color: 0x24272c })
-                );
-                runway.position.set(posX, GROUND_LEVEL + 0.1, posZ);
-                scene.add(runway);
-                airportsList.push({ pos: new THREE.Vector3(posX, GROUND_LEVEL, posZ) });
-            }
-        }
-
-        function generateEnemyCountry() {
-            const territory = new THREE.Mesh(
-                new THREE.PlaneGeometry(8000, 8000),
-                new THREE.MeshLambertMaterial({ color: 0x7f1d1d, transparent: true, opacity: 0.5 })
-            );
-            territory.rotation.x = -Math.PI / 2;
-            territory.position.set(0, GROUND_LEVEL + 0.15, -6000);
-            scene.add(territory);
-
-            for (let i = 0; i < 30; i++) {
-                const posX = (Math.sin(i) * 3000);
-                const posZ = -6000 + (Math.cos(i) * 3000);
-                enemyBasesList.push({ pos: new THREE.Vector3(posX, GROUND_LEVEL, posZ), radius: 600 });
-            }
+            const mainRiver = new THREE.Mesh(mainRiverGeo, riverMat);
+            scene.add(mainRiver);
         }
 
         function spawnAllyPlanes() {
-            // Continuously refill to maintain 4 allies
             while (allies.length < 4) {
                 const allyMesh = createPlaneModel(0x1e40af, 0x3b82f6, 'interceptor');
                 const playerPos = players[myPlayerIndex] ? players[myPlayerIndex].mesh.position : new THREE.Vector3(0, 0, 0);
@@ -592,15 +656,15 @@
             }
         }
 
+        // Continuous Infinite Enemies Spawner
         function spawnEnemyPlanes() {
-            // Continuously refill to maintain 10 enemies
-            while (enemies.length < 10) {
+            while (enemies.length < 12) {
                 const enemyMesh = createPlaneModel(0x991b1b, 0xd97706, 'interceptor');
                 const playerPos = players[myPlayerIndex] ? players[myPlayerIndex].mesh.position : new THREE.Vector3(0, 0, 0);
                 enemyMesh.position.set(
-                    playerPos.x + (Math.random() - 0.5) * 1200, 
-                    SPAWN_ALTITUDE + 20 + Math.random() * 200, 
-                    playerPos.z - 500 - Math.random() * 800
+                    playerPos.x + (Math.random() - 0.5) * 1600, 
+                    SPAWN_ALTITUDE + 30 + Math.random() * 250, 
+                    playerPos.z - 600 - Math.random() * 1200
                 );
                 scene.add(enemyMesh);
                 enemies.push({
@@ -614,8 +678,8 @@
 
         function createPlaneModel(bodyColor, wingColor, style) {
             const group = new THREE.Group();
-            const bodyMat = new THREE.MeshLambertMaterial({ color: bodyColor });
-            const wingMat = new THREE.MeshLambertMaterial({ color: wingColor });
+            const bodyMat = new THREE.MeshLambertMaterial({ color: style === 'xmas' ? 0xef4444 : bodyColor });
+            const wingMat = new THREE.MeshLambertMaterial({ color: style === 'xmas' ? 0x15803d : wingColor });
 
             const body = new THREE.Mesh(new THREE.BoxGeometry(style === 'gunship' ? 1.8 : 1.2, 1.2, 3.8), bodyMat);
             group.add(body);
@@ -626,6 +690,13 @@
                 const w2 = new THREE.Mesh(new THREE.BoxGeometry(5.5, 0.15, 1.2), wingMat);
                 w2.position.set(0, -0.4, 0);
                 group.add(w1, w2);
+            } else if (style === 'xmas') {
+                // Christmas Sleigh Jet Wings & Gold Trim
+                const wing = new THREE.Mesh(new THREE.BoxGeometry(7.0, 0.2, 1.5), wingMat);
+                wing.position.set(0, 0.1, 0.2);
+                const star = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.8), new THREE.MeshBasicMaterial({ color: 0xfacc15 }));
+                star.position.set(0, 0.8, 1.5);
+                group.add(wing, star);
             } else {
                 const wing = new THREE.Mesh(new THREE.BoxGeometry(style === 'stealth' ? 7.5 : 6.0, 0.18, 1.4), wingMat);
                 wing.position.set(0, 0.1, 0.2);
@@ -662,7 +733,7 @@
 
         function updatePlayers() {
             players.forEach((p) => {
-                if (!p || p.health <= 0) return;
+                if (!p || p.health <= 0 || isGameOver) return;
 
                 const now = Date.now();
 
@@ -681,19 +752,43 @@
                 p.velocity.add(engineThrust.multiplyScalar(0.04));
 
                 let dragFactor = p.airbrakeActive ? 0.95 : 0.988;
-
                 const speed = p.velocity.length();
 
                 const isOnGround = p.mesh.position.y <= SPAWN_ALTITUDE;
+
+                // --- CRASH MECHANIC 1: LANDING WITHOUT GEAR ---
                 if (isOnGround) {
+                    if (!p.gearDown || speed > 0.8) {
+                        triggerGameOver("CRASHED! GEAR WAS NOT DEPLOYED / TOUCHDOWN TOO FAST!");
+                        return;
+                    }
+
                     const rightDir = new THREE.Vector3(1, 0, 0).applyQuaternion(p.mesh.quaternion);
-                    
                     const lateralVel = rightDir.multiplyScalar(p.velocity.dot(rightDir));
                     const forwardVel = forwardDir.multiplyScalar(p.velocity.dot(forwardDir));
 
                     p.velocity.copy(forwardVel).add(lateralVel.multiplyScalar(0.92));
                     dragFactor = 0.97;
                 }
+
+                // --- CRASH MECHANIC 2: MOUNTAIN COLLISION ---
+                mountainObjects.forEach(mtn => {
+                    const distHoriz = Math.hypot(p.mesh.position.x - mtn.pos.x, p.mesh.position.z - mtn.pos.z);
+                    const mtnHeightAtPos = mtn.pos.y + (mtn.height * Math.max(0, (1 - distHoriz / mtn.radius)));
+                    
+                    if (distHoriz < mtn.radius && p.mesh.position.y < mtnHeightAtPos) {
+                        triggerGameOver("CRASHED INTO A MOUNTAIN PEAK!");
+                        return;
+                    }
+                });
+
+                // --- CRASH MECHANIC 3: MID-AIR ENEMY JET COLLISION ---
+                enemies.forEach(e => {
+                    if (e.health > 0 && p.mesh.position.distanceTo(e.mesh.position) < 5.5) {
+                        triggerGameOver("MID-AIR COLLISION WITH ENEMY JET!");
+                        return;
+                    }
+                });
 
                 p.velocity.multiplyScalar(dragFactor);
 
@@ -762,7 +857,7 @@
             const player = players[myPlayerIndex];
 
             // Update Allies
-            allies.forEach((ally, aIdx) => {
+            allies.forEach((ally) => {
                 if (ally.health <= 0) return;
 
                 let target = null;
@@ -792,7 +887,7 @@
             });
 
             // Update Enemies
-            enemies.forEach((enemy, eIdx) => {
+            enemies.forEach((enemy) => {
                 if (enemy.health <= 0) return;
 
                 let target = player ? player.mesh : null;
@@ -824,7 +919,6 @@
         function launchMissile(player) {
             const group = new THREE.Group();
             
-            // Missile body
             const body = new THREE.Mesh(
                 new THREE.CylinderGeometry(0.2, 0.2, 2.0, 8),
                 new THREE.MeshBasicMaterial({ color: 0xffffff })
@@ -832,7 +926,6 @@
             body.rotation.x = Math.PI / 2;
             group.add(body);
 
-            // Engine Trail / Flame
             const trail = new THREE.Mesh(
                 new THREE.ConeGeometry(0.25, 1.0, 8),
                 new THREE.MeshBasicMaterial({ color: 0xff4500 })
@@ -844,7 +937,6 @@
             group.position.copy(player.mesh.position);
             group.quaternion.copy(player.mesh.quaternion);
 
-            // Lock onto nearest enemy jet
             let target = null;
             let minDist = Infinity;
             enemies.forEach(e => {
@@ -870,28 +962,29 @@
         function updateProjectiles() {
             const player = players[myPlayerIndex];
 
-            // Enemy bullets hitting player
             for (let i = enemyBullets.length - 1; i >= 0; i--) {
                 const eb = enemyBullets[i];
                 eb.position.add(eb.userData.velocity);
                 if (player && eb.position.distanceTo(player.mesh.position) < 3.0) {
                     player.health -= 4;
                     document.getElementById('p1-health').style.width = Math.max(0, player.health) + '%';
+                    if (player.health <= 0) triggerGameOver("SHOT DOWN BY ENEMY FIRE!");
                     scene.remove(eb);
                     enemyBullets.splice(i, 1);
                 }
             }
 
-            // Player cannon bullets
             for (let i = playerBullets.length - 1; i >= 0; i--) {
                 const b = playerBullets[i];
                 b.position.add(b.userData.velocity);
 
-                enemies.forEach((enemy, eIdx) => {
+                for (let eIdx = enemies.length - 1; eIdx >= 0; eIdx--) {
+                    const enemy = enemies[eIdx];
                     if (b.position.distanceTo(enemy.mesh.position) < 5.0) {
                         enemy.health -= 25;
                         scene.remove(b);
                         playerBullets.splice(i, 1);
+
                         if (enemy.health <= 0) {
                             scene.remove(enemy.mesh);
                             enemies.splice(eIdx, 1);
@@ -903,11 +996,11 @@
                             }
                             document.getElementById('p1-cash').innerText = playerCredits;
                         }
+                        break;
                     }
-                });
+                }
             }
 
-            // Rapid-fire Missiles tracking & collision
             for (let i = playerMissiles.length - 1; i >= 0; i--) {
                 const m = playerMissiles[i];
                 m.userData.life--;
@@ -918,7 +1011,6 @@
                     continue;
                 }
 
-                // Missile homing guidance
                 if (m.userData.target && m.userData.target.health > 0) {
                     const targetDir = m.userData.target.mesh.position.clone().sub(m.position).normalize();
                     m.userData.velocity.lerp(targetDir.multiplyScalar(3.5), 0.08);
@@ -927,11 +1019,10 @@
 
                 m.position.add(m.userData.velocity);
 
-                // Collision checks
                 for (let eIdx = enemies.length - 1; eIdx >= 0; eIdx--) {
                     const enemy = enemies[eIdx];
                     if (m.position.distanceTo(enemy.mesh.position) < 8.0) {
-                        enemy.health -= 60; // High missile damage
+                        enemy.health -= 60;
                         scene.remove(m);
                         playerMissiles.splice(i, 1);
 
@@ -962,7 +1053,6 @@
 
             minimapCtx.clearRect(0, 0, mapSize, mapSize);
 
-            // Enemy Planes (Red)
             minimapCtx.fillStyle = '#ef4444';
             enemies.forEach(e => {
                 const rx = center + ((e.mesh.position.x - px) / radarRadius) * center;
@@ -970,7 +1060,6 @@
                 minimapCtx.fillRect(rx - 2, ry - 2, 5, 5);
             });
 
-            // Ally Planes (Blue)
             minimapCtx.fillStyle = '#3b82f6';
             allies.forEach(a => {
                 const rx = center + ((a.mesh.position.x - px) / radarRadius) * center;
@@ -978,7 +1067,6 @@
                 minimapCtx.fillRect(rx - 2, ry - 2, 4, 4);
             });
 
-            // Player (Green Center Dot)
             minimapCtx.fillStyle = '#00ff66';
             minimapCtx.beginPath();
             minimapCtx.arc(center, center, 4, 0, Math.PI * 2);
@@ -993,8 +1081,8 @@
         function animate() {
             requestAnimationFrame(animate);
             if (!isGameOver) {
-                spawnAllyPlanes();   // Keeps allies at 4 continuously
-                spawnEnemyPlanes();  // Keeps enemies at 10 continuously
+                spawnAllyPlanes();
+                spawnEnemyPlanes();
                 updatePlayers();
                 updateAIPlanes();
                 updateProjectiles();
@@ -1005,6 +1093,8 @@
             }
         }
 
+        // Check events & init menu
+        checkSpecialEvents();
         updateMenuUI();
     </script>
 </body>
