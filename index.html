@@ -660,8 +660,8 @@
         function spawnEnemyPlanes() {
             while (enemies.length < 12) {
                 const enemyMesh = createPlaneModel(0x991b1b, 0xd97706, 'interceptor');
-                const playerPos = players[myPlayerIndex] ? players[myPlayerIndex].mesh.position : new THREE.Vector3(0, 0, 0);
-                
+                const playerObj = players[myPlayerIndex];
+                const playerPos = (playerObj && playerObj.mesh) ? playerObj.mesh.position : new THREE.Vector3(0, 0, 0);
                 // Spawns enemies closer directly in front of the player
                 enemyMesh.position.set(
                     playerPos.x + (Math.random() - 0.5) * 600, 
