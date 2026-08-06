@@ -327,7 +327,7 @@
             }
 
             // 2. CHRISTMAS EVENT (Special Xmas Jet Unlock)
-            if (currentMonth === 11 || currentMonth === 11 && currentDay >= 24) { // December
+            if (currentMonth === 11 || (currentMonth === 11 && currentDay >= 24)) { // December
                 document.getElementById('xmas-banner').style.display = 'block';
                 if (!unlockedPlanes.includes('xmas')) {
                     unlockedPlanes.push('xmas');
@@ -656,16 +656,19 @@
             }
         }
 
-        // Continuous Infinite Enemies Spawner
+        // Continuous Infinite Enemies Spawner (Updated Position Fix)
         function spawnEnemyPlanes() {
             while (enemies.length < 12) {
                 const enemyMesh = createPlaneModel(0x991b1b, 0xd97706, 'interceptor');
                 const playerPos = players[myPlayerIndex] ? players[myPlayerIndex].mesh.position : new THREE.Vector3(0, 0, 0);
+                
+                // Spawns enemies closer directly in front of the player
                 enemyMesh.position.set(
-                    playerPos.x + (Math.random() - 0.5) * 1600, 
-                    SPAWN_ALTITUDE + 30 + Math.random() * 250, 
-                    playerPos.z - 600 - Math.random() * 1200
+                    playerPos.x + (Math.random() - 0.5) * 600, 
+                    playerPos.y + 20 + Math.random() * 100, 
+                    playerPos.z - 300 - Math.random() * 500
                 );
+                
                 scene.add(enemyMesh);
                 enemies.push({
                     mesh: enemyMesh,
