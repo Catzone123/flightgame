@@ -539,8 +539,7 @@
             scene.add(sun);
 
             createWorldTerrainAndRiver();
-            spawnAllyPlanes();
-            spawnEnemyPlanes();
+            
 
             const bodyColor = parseInt(document.getElementById('body-color').value.replace('#', '0x'));
             const wingColor = parseInt(document.getElementById('wing-color').value.replace('#', '0x'));
@@ -557,8 +556,9 @@
                 lastShoot: 0, lastMissile: 0, gearDown: true, lastGearToggle: 0,
                 airbrakeActive: false
             };
-
-            updateMenuUI();
+           spawnAllyPlanes();
+           spawnEnemyPlanes();
+           updateMenuUI();
 
             window.addEventListener('keydown', e => {
                 keys[e.code] = true;
